@@ -74,20 +74,10 @@ android {
   
 
   signingConfigs {
-    val localProperties = java.util.Properties().apply {
-      val localFile = rootProject.file("local.properties")
-      if (localFile.exists()) {
-        localFile.inputStream().use { load(it) }
-      }
-    }
     val keyStorePath = "${rootProject.projectDir}/signing/signing-key.jks"
     val keyStoreFile = file(keyStorePath)
-    val signing_storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-        ?: localProperties.getProperty("signing.storePassword")
-        ?: ""
-    val signing_keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
-        ?: localProperties.getProperty("signing.keyPassword")
-        ?: ""
+    val signing_storePassword = System.getenv("SIGNING_STORE_PASSWORD") ?: ""
+    val signing_keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: ""
 
     if (keyStoreFile.exists() && signing_storePassword.isNotEmpty()) {
       create("custom") {
