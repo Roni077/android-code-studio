@@ -66,6 +66,8 @@ jobs:
           mkdir -p core/app/build/intermediates/external_file_lib_dex_archives/release/desugarReleaseFileDependencies
           mkdir -p core/app/build/intermediates/l8_art_profile/debug/l8DexDesugarLibDebug
           mkdir -p core/app/build/intermediates/l8_art_profile/release/l8DexDesugarLibRelease
+          touch core/app/build/intermediates/l8_art_profile/debug/l8DexDesugarLibDebug/baseline-prof.txt
+          touch core/app/build/intermediates/l8_art_profile/release/l8DexDesugarLibRelease/baseline-prof.txt
 
       - name: Change Gradle wrapper permissions
         run: chmod +x ./gradlew

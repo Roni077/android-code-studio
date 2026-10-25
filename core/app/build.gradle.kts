@@ -176,7 +176,20 @@ afterEvaluate {
   variants.forEach { variant ->
     val capitalized = variant.replaceFirstChar { it.uppercase() }
     file("build/intermediates/external_file_lib_dex_archives/$variant/desugar${capitalized}FileDependencies").mkdirs()
-    file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}").mkdirs()
+    val l8Dir = file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}")
+    l8Dir.mkdirs()
+    file(l8Dir, "baseline-prof.txt").createNewFile()
+  }
+}
+
+tasks.matching { it.name.contains("ArtProfile", ignoreCase = true) }.configureEach {
+  doFirst {
+    listOf("debug", "release").forEach { variant ->
+      val capitalized = variant.replaceFirstChar { it.uppercase() }
+      val l8Dir = file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}")
+      l8Dir.mkdirs()
+      file(l8Dir, "baseline-prof.txt").createNewFile()
+    }
   }
 }
 
