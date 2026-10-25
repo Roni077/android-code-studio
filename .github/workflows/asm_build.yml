@@ -4,6 +4,7 @@ on:
   push:
     branches: 
       - "dev"
+      - "dev2"
       - "main" 
       - "indexing"
       - "release/**"
@@ -78,14 +79,14 @@ jobs:
       - name: Create local.properties
         run: |
           echo "signing.storeFile=signing/signing-key.jks" >> local.properties
-          echo "signing.storePassword=${{ secrets.SIGNING_SK_PASSWORD }}" >> local.properties
+          echo "signing.storePassword=${{ secrets.SIGNING_STORE_PASSWORD || secrets.SIGNING_SK_PASSWORD }}" >> local.properties
           echo "signing.keyAlias=androidcs" >> local.properties
-          echo "signing.keyPassword=${{ secrets.SIGNING_SK_PASSWORD }}" >> local.properties
+          echo "signing.keyPassword=${{ secrets.SIGNING_KEY_PASSWORD || secrets.SIGNING_SK_PASSWORD }}" >> local.properties
 
       - name: Assemble APK
         env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || secrets.SIGNING_SK_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || secrets.SIGNING_SK_PASSWORD }}
         run: ./gradlew assemble${{ env.BUILD_TYPE }}
 
       - name: List APK files
