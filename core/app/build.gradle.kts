@@ -176,9 +176,11 @@ afterEvaluate {
   variants.forEach { variant ->
     val capitalized = variant.replaceFirstChar { it.uppercase() }
     file("build/intermediates/external_file_lib_dex_archives/$variant/desugar${capitalized}FileDependencies").mkdirs()
-    val l8Dir = file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}")
-    l8Dir.mkdirs()
-    java.io.File(l8Dir, "baseline-prof.txt").createNewFile()
+    val profFile = file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}/baseline-prof.txt")
+    profFile.parentFile?.mkdirs()
+    if (!profFile.exists()) {
+      profFile.createNewFile()
+    }
   }
 }
 
@@ -186,9 +188,11 @@ tasks.matching { it.name.contains("ArtProfile", ignoreCase = true) }.configureEa
   doFirst {
     listOf("debug", "release").forEach { variant ->
       val capitalized = variant.replaceFirstChar { it.uppercase() }
-      val l8Dir = file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}")
-      l8Dir.mkdirs()
-      java.io.File(l8Dir, "baseline-prof.txt").createNewFile()
+      val profFile = file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}/baseline-prof.txt")
+      profFile.parentFile?.mkdirs()
+      if (!profFile.exists()) {
+        profFile.createNewFile()
+      }
     }
   }
 }
