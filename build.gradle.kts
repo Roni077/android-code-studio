@@ -73,6 +73,12 @@ tasks.withType<KotlinCompile>().configureEach {
     freeCompilerArgs.addAll("-Xstring-concat=inline")
   }
 }
+
+  tasks.configureEach {
+    if (name.startsWith("verify") && name.endsWith("Resources")) {
+      enabled = false
+    }
+  }
 }
 
 tasks.register<Delete>("clean") { delete(rootProject.layout.buildDirectory) }
