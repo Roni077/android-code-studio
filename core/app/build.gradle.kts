@@ -105,9 +105,7 @@ android {
 
     release {
       isShrinkResources = false
-      signingConfigs.findByName("custom")?.let {
-        signingConfig = it
-      }
+      signingConfig = signingConfigs.findByName("custom") ?: signingConfigs.findByName("debug")
     }
   }
   
@@ -170,6 +168,15 @@ android {
           "Generated APK: $fileName for variant: ${variant.name}, arch: $archSuffix, versionCode: $versionCode"
       )
     }
+  }
+}
+
+afterEvaluate {
+  val variants = listOf("debug", "release")
+  variants.forEach { variant ->
+    val capitalized = variant.replaceFirstChar { it.uppercase() }
+    file("build/intermediates/external_file_lib_dex_archives/$variant/desugar${capitalized}FileDependencies").mkdirs()
+    file("build/intermediates/l8_art_profile/$variant/l8DexDesugarLib${capitalized}").mkdirs()
   }
 }
 
