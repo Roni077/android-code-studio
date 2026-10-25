@@ -53,8 +53,6 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
     this.fragments.add(
         new Tab(fragmentActivity.getString(R.string.app_logs), AppLogFragment.class, ++index));
 
-    this.fragments.add(
-        new Tab(fragmentActivity.getString(R.string.title_terminal), TerminalFragment.class, ++index));
 
     this.fragments.add(
         new Tab(fragmentActivity.getString(R.string.ide_logs), IDELogFragment.class, ++index));
@@ -152,10 +150,6 @@ public class EditorBottomSheetTabAdapter extends FragmentStateAdapter {
     return findFragmentByClass(SearchResultFragment.class);
   }
 
-  @Nullable
-  public TerminalFragment getTerminalFragment() {
-    return findFragmentByClass(TerminalFragment.class);
-  }
 
   public <T extends Fragment> int findIndexOfFragmentByClass(@NonNull Class<T> tClass) {
     final var name = tClass.getName();

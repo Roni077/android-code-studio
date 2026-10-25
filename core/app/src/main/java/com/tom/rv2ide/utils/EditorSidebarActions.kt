@@ -27,6 +27,10 @@ import com.tom.rv2ide.actions.sidebar.SubModuleSidebarAction
 import com.tom.rv2ide.actions.sidebar.GitClientAction
 import com.tom.rv2ide.actions.sidebar.TerminalSidebarAction
 import com.tom.rv2ide.fragments.sidebar.EditorSidebarFragment
+import com.tom.rv2ide.preferences.internal.EditorPreferences
+import android.util.TypedValue
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import androidx.fragment.app.Fragment
 import java.lang.ref.WeakReference
 
@@ -46,6 +50,7 @@ internal object EditorSidebarActions {
     registry.registerAction(AIAgentSidebarAction(context, ++order))
     registry.registerAction(AssetStudioSidebarAction(context, ++order))
     registry.registerAction(SubModuleSidebarAction(context, ++order))
+    registry.registerAction(TerminalSidebarAction(context, ++order))
     registry.registerAction(PreferencesSidebarAction(context, ++order))
     registry.registerAction(CloseProjectSidebarAction(context, ++order))
   }
@@ -169,6 +174,7 @@ internal object EditorSidebarActions {
             },
             onItemLongClick = { item ->
               if (item.action is TerminalSidebarAction) {
+                TerminalSidebarAction.startTerminalActivity(data, true)
                 true
               } else {
                 false
@@ -176,8 +182,66 @@ internal object EditorSidebarActions {
             },
         )
 
-    navigationRecycler.layoutManager =
-        LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+    val navPref = EditorPreferences.navigationStyle
+    val isTablet = context.resources.configuration.screenWidthDp >= 600
+    val useSideRail = when (navPref) {
+      EditorPreferences.NAVIGATION_STYLE_SIDE_RAIL -> true
+      EditorPreferences.NAVIGATION_STYLE_BOTTOM -> false
+      else -> isTablet
+    }
+
+    val rootView = binding.root as? LinearLayout
+    val d72 = TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP, 72f, context.resources.displayMetrics
+    ).toInt()
+
+    if (rootView != null) {
+      if (useSideRail) {
+        rootView.orientation = LinearLayout.HORIZONTAL
+        if (rootView.indexOfChild(binding.navigation) > rootView.indexOfChild(binding.sidebarContainer)) {
+          rootView.removeView(binding.navigation)
+          rootView.addView(binding.navigation, 0)
+        }
+        binding.navigation.layoutParams = LinearLayout.LayoutParams(
+            d72, ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        binding.sidebarContainer.layoutParams = LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f
+        )
+        navigationRecycler.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        )
+        navigationRecycler.layoutManager =
+            LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+      } else {
+        rootView.orientation = LinearLayout.VERTICAL
+        if (rootView.indexOfChild(binding.navigation) < rootView.indexOfChild(binding.sidebarContainer)) {
+          rootView.removeView(binding.navigation)
+          rootView.addView(binding.navigation)
+        }
+        binding.navigation.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        )
+        binding.sidebarContainer.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        )
+        navigationRecycler.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, d72
+        )
+        navigationRecycler.layoutManager =
+            LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+      }
+    } else {
+      navigationRecycler.layoutManager =
+          if (useSideRail) {
+            LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
+          } else {
+            LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+          }
+    }
+
     navigationRecycler.adapter = adapter
     adapter.submitList(navigationItems)
 

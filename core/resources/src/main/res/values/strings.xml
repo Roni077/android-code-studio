@@ -1041,4 +1041,11 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="lsp_ok_button">OK</string>
   <string name="lsp_installation_failed_description">Failed to install update: %s</string>
   <string name="lsp_retry_button">Retry</string>
+
+  <!-- Sidebar Navigation Style Preferences -->
+  <string name="idepref_editor_nav_style_title">Sidebar Navigation Style</string>
+  <string name="idepref_editor_nav_style_summary">Choose between Bottom Navigation (optimal for phones) or Side Rail (optimal for tablets/landscape)</string>
+  <string name="idepref_editor_nav_style_auto">Auto (Responsive based on screen)</string>
+  <string name="idepref_editor_nav_style_bottom">Bottom Navigation Bar</string>
+  <string name="idepref_editor_nav_style_side_rail">Side Navigation Rail</string>
 </resources>

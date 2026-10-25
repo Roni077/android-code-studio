@@ -26,7 +26,6 @@ import com.tom.rv2ide.R
 import com.tom.rv2ide.actions.ActionData
 import com.tom.rv2ide.actions.requireContext
 import com.tom.rv2ide.activities.TerminalActivity
-import com.tom.rv2ide.fragments.TerminalFragment
 import com.tom.rv2ide.projects.IProjectManager
 import java.util.Objects
 import kotlin.reflect.KClass
@@ -39,7 +38,7 @@ import kotlin.reflect.KClass
 class TerminalSidebarAction(context: Context, override val order: Int) : AbstractSidebarAction() {
 
   override val id: String = ID
-  override val fragmentClass: KClass<out Fragment> = TerminalFragment::class  // Changed this line
+  override val fragmentClass: KClass<out Fragment>? = null
 
   init {
     label = context.getString(R.string.title_terminal)
@@ -49,11 +48,27 @@ class TerminalSidebarAction(context: Context, override val order: Int) : Abstrac
 
   companion object {
     const val ID = "ide.editor.sidebar.terminal"
+
+    fun startTerminalActivity(data: ActionData, isFailsafe: Boolean) {
+      val context = data.requireContext()
+      val intent =
+          Intent(context, TerminalActivity::class.java).apply {
+            putExtra(
+                TERMUX_ACTIVITY.EXTRA_SESSION_WORKING_DIR,
+                Objects.requireNonNull(IProjectManager.getInstance().projectDirPath),
+            )
+            putExtra(
+                TERMUX_ACTIVITY.EXTRA_SESSION_NAME,
+                IProjectManager.getInstance().getWorkspace()?.getRootProject()?.name,
+            )
+            putExtra(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, isFailsafe)
+          }
+      context.startActivity(intent)
+    }
   }
 
   override suspend fun execAction(data: ActionData): Any {
-    // The fragment will be shown automatically by the sidebar system
-    // since fragmentClass is now set
+    startTerminalActivity(data, false)
     return true
   }
 }

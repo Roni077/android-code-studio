@@ -101,8 +101,10 @@ lint/outputs/
 lint/tmp/
 # lint/reports/
 
-# R
+# Scripts & Docs
 scripts/
+docs/setup/
+
 # signing/
 # local.properties
 build.log
@@ -110,3 +112,22 @@ build.log
 
 external/logwire/build
 external/atc/build
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE & Editors
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Knowledge Graph
+graphify-out/

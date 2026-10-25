@@ -84,6 +84,7 @@ private class CommonConfigurations(
     addPreference(TextSize())
     addPreference(TabSize())
     addPreference(ColorSchemePreference())
+    addPreference(NavigationStylePreference())
     addPreference(NonPrintablePaintingFlags())
     addPreference(FontLigatures())
     addPreference(autoSave())
@@ -261,6 +262,47 @@ private class ColorSchemePreference(
       position: Int,
   ) {
     EditorPreferences.colorScheme = (entry?.data as? IDEColorScheme?)?.key ?: DEFAULT_COLOR_SCHEME
+  }
+}
+
+@Parcelize
+private class NavigationStylePreference(
+    override val key: String = EditorPreferences.NAVIGATION_STYLE,
+    override val title: Int = string.idepref_editor_nav_style_title,
+    override val summary: Int? = string.idepref_editor_nav_style_summary,
+    override val icon: Int? = null,
+) : SingleChoicePreference() {
+
+  @IgnoredOnParcel override val dialogCancellable = true
+
+  override fun getEntries(preference: Preference): Array<PreferenceChoices.Entry> {
+    val currentStyle = EditorPreferences.navigationStyle
+    return arrayOf(
+        PreferenceChoices.Entry(
+            label = preference.context.getString(string.idepref_editor_nav_style_auto),
+            _isChecked = currentStyle == EditorPreferences.NAVIGATION_STYLE_AUTO,
+            data = EditorPreferences.NAVIGATION_STYLE_AUTO,
+        ),
+        PreferenceChoices.Entry(
+            label = preference.context.getString(string.idepref_editor_nav_style_bottom),
+            _isChecked = currentStyle == EditorPreferences.NAVIGATION_STYLE_BOTTOM,
+            data = EditorPreferences.NAVIGATION_STYLE_BOTTOM,
+        ),
+        PreferenceChoices.Entry(
+            label = preference.context.getString(string.idepref_editor_nav_style_side_rail),
+            _isChecked = currentStyle == EditorPreferences.NAVIGATION_STYLE_SIDE_RAIL,
+            data = EditorPreferences.NAVIGATION_STYLE_SIDE_RAIL,
+        ),
+    )
+  }
+
+  override fun onChoiceConfirmed(
+      preference: Preference,
+      entry: PreferenceChoices.Entry?,
+      position: Int,
+  ) {
+    EditorPreferences.navigationStyle =
+        (entry?.data as? String) ?: EditorPreferences.NAVIGATION_STYLE_AUTO
   }
 }
 

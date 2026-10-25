@@ -53,6 +53,11 @@ object EditorPreferences {
   const val STICKY_SCROLL_ENABLED = "idepref_editor_stickyScrollEnabled"
   const val PIN_LINE_NUMBERS = "idepref_editor_pinLineNumbers"
 
+  const val NAVIGATION_STYLE = "idepref_editor_navigation_style"
+  const val NAVIGATION_STYLE_AUTO = "auto"
+  const val NAVIGATION_STYLE_BOTTOM = "bottom"
+  const val NAVIGATION_STYLE_SIDE_RAIL = "side_rail"
+
   const val COLOR_SCHEME = "idepref_editor_colorScheme"
   const val SYNTAX_ENGINE = "idepref_editor_syntaxEngine"
   const val DEFAULT_COLOR_SCHEME = "default"
@@ -218,4 +223,10 @@ object EditorPreferences {
   var pinLineNumbers: Boolean
     get() = prefManager.getBoolean(PIN_LINE_NUMBERS, true)
     set(value) = prefManager.putBoolean(PIN_LINE_NUMBERS, value)
+
+  var navigationStyle: String
+    get() = prefManager.getString(NAVIGATION_STYLE, NAVIGATION_STYLE_AUTO)
+    set(value) {
+      prefManager.putString(NAVIGATION_STYLE, value)
+    }
 }
