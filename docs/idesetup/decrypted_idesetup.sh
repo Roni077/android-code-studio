@@ -100,7 +100,7 @@ setup_ndk_extractor() {
     api_level_arch_detect
     
     if [[ "$ndk_version" != "0" ]]; then
-        NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/AndroidCSOfficial/acs-build-system/refs/heads/main/acs-manifest.json"
+        NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/userio12/acs-build-system/refs/heads/main/acs-manifest.json"
         PACKAGE_ID="android-native-kit"
             
         NDK_FILENAME=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$ndk_version" -f filename)
