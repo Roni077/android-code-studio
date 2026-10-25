@@ -22,6 +22,7 @@ pkgm="pkg"
 pkg_curl="libcurl"
 pkgs="jq tar wget"
 jdk_version="17"
+ndk_version="0"
 ndk=false
 
 npr() {
@@ -185,7 +186,7 @@ download_and_extract_ndk() {
 parse_ndk() {
     local arch="$1"
     local option="${2:---getfilename}" 
-    local url="https://github.com/AndroidIDE-Rv2Official/rv2ide-native-kit/raw/refs/heads/main/native-kit.json"
+    local url="https://raw.githubusercontent.com/userio12/acs-build-system/main/acs-manifest.json"
 
     # normalize option to lowercase
     option=$(echo "$option" | tr '[:upper:]' '[:lower:]')
@@ -204,7 +205,7 @@ parse_ndk() {
     esac
 
     curl -sL "$url" | jq -r --arg arch "$arch" --arg field "$field" \
-        '.[] | select(.architecture==$arch) | .[$field]'
+        '.packages[] | select((.architecture==$arch or ($arch=="arm" and .architecture=="armeabi-v7a")) and (.filename | contains("native-kit") or contains("native-development-kit"))) | .[$field]' | head -n 1
 }
 
 simple_downloader() {
@@ -220,15 +221,40 @@ simple_downloader() {
 }
 setup_ndk_extractor() {
     api_level_arch_detect
-    NDK_MANIFEST_FILE_URL="https://github.com/AndroidIDE-Rv2Official/rv2ide-native-kit/raw/refs/heads/main/native-kit.json"
-    NDK_MANIFEST_FILE="$HOME/native-kit.json"
+    local req_ver="${ndk_version:-28.2.13676358}"
+    [ "$req_ver" = "0" ] && req_ver="28.2.13676358"
 
-    # npr "Downloading manifest file..."
-    # if wget -q --no-check-certificate -O \
-    # "$NDK_MANIFEST_FILE" \
-    # "$NDK_MANIFEST_FILE_URL"; then
-        # npr "Successfully downloaded native-kit.json"
-    # fi
+    if command -v acs >/dev/null 2>&1; then
+        NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/userio12/acs-build-system/refs/heads/main/acs-manifest.json"
+        PACKAGE_ID="android-native-kit"
+            
+        NDK_FILENAME=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" -f filename)
+        NDK_OUTPUTDIR="$HOME/acs/$NDK_FILENAME"
+        NDK_VERSION=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" -f version)   
+        NDK_CHECKSUM=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" -f sha256)
+        
+        echo
+        npr "- Native Development Kit Manager - "
+        npr "\t - Device abi: $ABI"
+        npr "\t - Artifact name: $NDK_FILENAME"
+        npr "\t - NDK version: $NDK_VERSION"
+        npr "\t - NDK sha256sum: ${NDK_CHECKSUM:0:8}..."
+        echo
+        npr "Downloading $NDK_FILENAME..."
+    
+        OUTPUT_BIN="$PREFIX/bin/ndk_extractor"
+        if ! acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" --download; then
+            this_abort "Failed to download Native Development Kit, Version: $NDK_VERSION ! Please try again..."
+        fi
+        
+        mv "$NDK_OUTPUTDIR" "$OUTPUT_BIN" || this_abort "Something went wrong while renaming $NDK_FILENAME"
+        
+        npr "Setting up token chain..."
+        if chmod +x $OUTPUT_BIN; then
+            npr "Splendid. every operation succeeded"
+        fi
+        return 0
+    fi
     
     NDK_FILENAME=$(parse_ndk $ABI --getfilename)   
     NDK_URL=$(parse_ndk $ABI --geturl)   
@@ -289,7 +315,8 @@ setup_ndk() {
     npr "Running environmental check..."
     [ ! -f $PREFIX/bin/ndk_extractor ] && setup_ndk_extractor
     local ndkUrl="https://github.com/Mohammed-Baqer-null/AndroidIDE-Rv2-ndk/releases/download/v27.1.12297006/android-ndk-r27b-aarch64.zip"
-    local ndkVersion="28.2.13676358"
+    local ndkVersion="${ndk_version:-28.2.13676358}"
+    [ "$ndkVersion" = "0" ] && ndkVersion="28.2.13676358"
     local not_supported=("x86" "riscv64")
     local ndk_file_structure=""
     api_level_arch_detect
@@ -315,7 +342,7 @@ DIR=$(cd "$(dirname "$0")" && pwd)
             this_abort "Failed to extract NDK"
         fi
     else
-        npr "NDK:28.2.13676358 Already installed! SETUP Skipped"
+        npr "NDK:$ndkVersion Already installed! SETUP Skipped"
     fi
 fi
 }
@@ -516,6 +543,14 @@ while [ $# -gt 0 ]; do
   -wn | --with-ndk)
     shift
     ndk=true
+    ;;
+  -n | --ndk)
+    shift
+    check_arg_value "--ndk" "${1:-}"
+    ndk_version="$1"
+    if [[ "$ndk_version" != "0" ]]; then
+      ndk=true
+    fi
     ;;
   -y | --assume-yes)
     shift
