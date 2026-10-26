@@ -60,7 +60,7 @@ private constructor(
       if (!tempDir.exists()) {
         tempDir.mkdirs()
       }
-      val script = File(tempDir, "idesetup")
+      val script = File(tempDir, "idesetup.sh")
 
       // write script contents
       if (!writeIdesetupScript(context, script)) {
@@ -83,8 +83,13 @@ private constructor(
               com.tom.rv2ide.app.configuration.CpuArch.X86_64 -> "x86_64"
               com.tom.rv2ide.app.configuration.CpuArch.X86 -> "x86"
             }
-        context.assets.open(ToolsManager.getCommonAsset("${folderName}/idesetup")).use { inputStream
-          ->
+        val assetName = try {
+          context.assets.open(ToolsManager.getCommonAsset("${folderName}/idesetup.sh")).close()
+          "${folderName}/idesetup.sh"
+        } catch (_: Exception) {
+          "${folderName}/idesetup"
+        }
+        context.assets.open(ToolsManager.getCommonAsset(assetName)).use { inputStream ->
           FileOutputStream(script).use { outputStream -> inputStream.copyTo(outputStream) }
         }
         true

@@ -98,13 +98,13 @@ TerminalActivity
        │
        ├─► IdesetupSession.createScript(Context)
        │         │
-       │         ├─► Copies assets/data/common/${arch}/idesetup -> files/temp/idesetup
+       │         ├─► Copies assets/data/common/${arch}/idesetup.sh -> files/temp/idesetup.sh
        │         └─► FileUtils.setFilePermissions(script, "rwx")
        │
        ▼
 Termux Shell
        │
-       ├─► Executes files/temp/idesetup with generated arguments
+       ├─► Executes files/temp/idesetup.sh with generated arguments
        ├─► ELF decrypts script payload in memory
        ├─► Runs bash / downloads packages / extracts NDK
        └─► Writes $SYSROOT/etc/ide-environment.properties
