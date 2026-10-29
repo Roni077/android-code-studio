@@ -123,6 +123,16 @@ public final class Environment {
         DART_SDK = new File(FLUTTER_HOME, "bin/cache/dart-sdk");
         DART_BIN = new File(DART_SDK, "bin/dart");
 
+        // Symlink $HOME/flutter-sdk -> FLUTTER_HOME for easier access within $HOME
+        File flutterSdkLink = new File(HOME, "flutter-sdk");
+        if (FLUTTER_HOME.exists() && !flutterSdkLink.exists()) {
+            try {
+                android.system.Os.symlink(FLUTTER_HOME.getAbsolutePath(), flutterSdkLink.getAbsolutePath());
+            } catch (Throwable t) {
+                LOG.error("Failed to create symlink for flutter-sdk: {}", t.getMessage());
+            }
+        }
+
         setExecutable(JAVA);
         setExecutable(BASH_SHELL);
 

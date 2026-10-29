@@ -231,6 +231,7 @@ mkdir -p "$PREFIX/bin"
 ln -sf "$FLUTTER_ROOT/bin/flutter" "$PREFIX/bin/flutter"
 ln -sf "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" "$PREFIX/bin/dart"
 chmod +x "$PREFIX/bin/flutter" "$PREFIX/bin/dart"
+ln -sf "$FLUTTER_ROOT" "$HOME/flutter-sdk"
 
 # Self-registration so fluttersetup is globally available
 if [ -f "${BASH_SOURCE[0]:-${0}}" ]; then

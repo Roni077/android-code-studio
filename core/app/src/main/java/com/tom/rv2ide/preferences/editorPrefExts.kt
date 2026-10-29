@@ -87,7 +87,7 @@ private class CommonConfigurations(
     addPreference(NavigationStylePreference())
     addPreference(NonPrintablePaintingFlags())
     addPreference(FontLigatures())
-    addPreference(autoSave())
+    addPreference(AutoSaveTwo())
     addPreference(keyboardSuggestions())
     addPreference(UseCustomFont())
     addPreference(UseSoftTab())
@@ -154,7 +154,7 @@ private class FontLigatures(
     )
 
 @Parcelize
-private class autoSave(
+private class AutoSaveTwo(
     override val key: String = AUTO_SAVE_TWO,
     override val title: Int = string.idepref_editor_autosave_title,
     override val summary: Int? = string.idepref_editor_autosave_summary,

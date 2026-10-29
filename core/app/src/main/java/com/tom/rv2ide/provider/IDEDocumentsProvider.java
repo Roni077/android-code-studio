@@ -159,6 +159,21 @@ public class IDEDocumentsProvider extends DocumentsProvider {
     LOG.debug("queryRoots() before all add, 7");
     row.add(Root.COLUMN_ICON, R.mipmap.ic_launcher);
     LOG.debug("queryRoots() before all add");
+
+    if (Environment.FLUTTER_HOME != null && Environment.FLUTTER_HOME.exists()) {
+      final MatrixCursor.RowBuilder flutterRow = result.newRow();
+      flutterRow.add(Root.COLUMN_ROOT_ID, getDocIdForFile(Environment.FLUTTER_HOME));
+      flutterRow.add(Root.COLUMN_DOCUMENT_ID, getDocIdForFile(Environment.FLUTTER_HOME));
+      flutterRow.add(Root.COLUMN_SUMMARY, "Flutter and Dart SDK installation");
+      flutterRow.add(
+          Root.COLUMN_FLAGS,
+          Root.FLAG_SUPPORTS_SEARCH | Root.FLAG_SUPPORTS_IS_CHILD);
+      flutterRow.add(Root.COLUMN_TITLE, "Flutter SDK");
+      flutterRow.add(Root.COLUMN_MIME_TYPES, ALL_MIME_TYPES);
+      flutterRow.add(Root.COLUMN_AVAILABLE_BYTES, Environment.FLUTTER_HOME.getFreeSpace());
+      flutterRow.add(Root.COLUMN_ICON, R.drawable.flutter_app);
+    }
+
     return result;
   }
 
@@ -186,8 +201,11 @@ public class IDEDocumentsProvider extends DocumentsProvider {
     final MatrixCursor result =
         new MatrixCursor(projection != null ? projection : DEFAULT_DOCUMENT_PROJECTION);
     final File parent = getFileForDocId(parentDocumentId);
-    for (File file : parent.listFiles()) {
-      includeFile(result, null, file);
+    File[] files = parent.listFiles();
+    if (files != null) {
+      for (File file : files) {
+        includeFile(result, null, file);
+      }
     }
     return result;
   }
@@ -212,15 +230,18 @@ public class IDEDocumentsProvider extends DocumentsProvider {
       // Avoid directories outside the $HOME directory linked with symlinks (to avoid e.g.
       // search
       // through the whole SD card).
-      boolean isInsideHome;
+      boolean isInsideRoot;
       try {
-        isInsideHome = file.getCanonicalPath().startsWith(Environment.HOME.getAbsolutePath());
+        isInsideRoot = file.getCanonicalPath().startsWith(parent.getCanonicalPath());
       } catch (IOException e) {
-        isInsideHome = true;
+        isInsideRoot = true;
       }
-      if (isInsideHome) {
+      if (isInsideRoot) {
         if (file.isDirectory()) {
-          Collections.addAll(pending, file.listFiles());
+          File[] children = file.listFiles();
+          if (children != null) {
+            Collections.addAll(pending, children);
+          }
         } else {
           if (file.getName().toLowerCase(Locale.ROOT).contains(query)) {
             includeFile(result, null, file);

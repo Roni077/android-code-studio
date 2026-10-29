@@ -29,6 +29,7 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
+import com.tom.rv2ide.utils.TypefaceUtils
 
 class TerminalFragment : Fragment() {
     
@@ -186,7 +187,7 @@ class TerminalFragment : Fragment() {
         terminalView?.apply {
             setTerminalViewClient(terminalViewClient)
             setTextSize(savedTextSize)
-            setTypeface(Typeface.MONOSPACE)
+            setTypeface(TypefaceUtils.terminalFontOrJBMono())
             isFocusable = true
             isFocusableInTouchMode = true
         }
@@ -258,6 +259,7 @@ class TerminalFragment : Fragment() {
     
     override fun onResume() {
         super.onResume()
+        terminalView?.setTypeface(TypefaceUtils.terminalFontOrJBMono())
         terminalView?.setTerminalCursorBlinkerState(true, true)
     }
     

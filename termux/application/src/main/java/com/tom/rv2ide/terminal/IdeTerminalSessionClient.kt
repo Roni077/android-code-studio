@@ -21,6 +21,7 @@ import com.termux.app.terminal.TermuxTerminalSessionActivityClient
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.tom.rv2ide.activities.TerminalActivity
+import com.tom.rv2ide.utils.TypefaceUtils
 
 /**
  * [TerminalSessionClient] delegate for AndroidIDE.
@@ -29,6 +30,21 @@ import com.tom.rv2ide.activities.TerminalActivity
  */
 class IdeTerminalSessionClient(activity: TerminalActivity) :
     TermuxTerminalSessionActivityClient(activity) {
+
+  override fun checkForFontAndColors() {
+    super.checkForFontAndColors()
+    try {
+      val typeface = TypefaceUtils.terminalFontOrJBMono()
+      mActivity?.terminalView?.setTypeface(typeface)
+    } catch (e: Exception) {
+      // Fallback already handled by super
+    }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    checkForFontAndColors()
+  }
 
   override fun onSessionFinished(finishedSession: TerminalSession) {
     val termuxSession =

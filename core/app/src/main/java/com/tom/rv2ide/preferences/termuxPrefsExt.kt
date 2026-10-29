@@ -21,7 +21,14 @@ import android.content.Context
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.preference.Preference
+import android.app.Activity
+import android.content.Intent
+import android.widget.Toast
 import com.termux.shared.logger.Logger
+import com.tom.rv2ide.utils.Environment
+import com.tom.rv2ide.utils.TypefaceUtils
+import java.io.File
+import kotlinx.parcelize.IgnoredOnParcel
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences
 import com.tom.rv2ide.R
 import com.tom.rv2ide.app.IDEApplication
@@ -233,6 +240,8 @@ class TermuxKbdSoftKbdOnlyIfNoHardKbdEnabledPreference(
         property = ::isSoftKbdOnlyIfNoHardKbdEnabled,
     )
 
+private const val KEY_TERMUX_VIEW_CUSTOM_FONT = "${KEY_TERMUX_VIEW_PREFERENCES}.customFont"
+
 @Parcelize
 class TermuxViewPreferences(
     override val key: String = KEY_TERMUX_VIEW_PREFERENCES,
@@ -242,6 +251,99 @@ class TermuxViewPreferences(
 
   init {
     addPreference(TermuxViewMarginAdjustmentEnabledPreference())
+    addPreference(UseTerminalCustomFont())
+  }
+}
+
+@Parcelize
+class UseTerminalCustomFont(
+    override val key: String = KEY_TERMUX_VIEW_CUSTOM_FONT,
+    override val title: Int = R.string.idepref_customFont_title,
+    override val summary: Int? = R.string.idepref_customFont_summary,
+    override val icon: Int? = R.drawable.ic_custom_font,
+) : SingleChoicePreference() {
+
+  companion object {
+    const val PICK_FONT_REQUEST = 1001
+  }
+
+  @IgnoredOnParcel override val dialogCancellable = true
+
+  override fun getEntries(preference: Preference): Array<PreferenceChoices.Entry> {
+    val fontDir = File("${Environment.HOME}/.androidide/ui")
+    val fontFiles = fontDir.listFiles { file ->
+      file.extension.lowercase() in listOf("ttf", "otf")
+    }?.map { it.name }?.sorted() ?: emptyList()
+
+    val currentFont = TypefaceUtils.selectedTerminalCustomFont
+
+    val entries = mutableListOf<PreferenceChoices.Entry>()
+
+    entries.add(
+      PreferenceChoices.Entry(
+        label = "JetBrains Mono (Default)",
+        _isChecked = currentFont == null,
+        data = ""
+      )
+    )
+
+    fontFiles.forEach { fontName ->
+      entries.add(
+        PreferenceChoices.Entry(
+          label = fontName.substringBeforeLast("."),
+          _isChecked = currentFont == fontName,
+          data = fontName
+        )
+      )
+    }
+
+    entries.add(
+      PreferenceChoices.Entry(
+        label = "+ Add New Font",
+        _isChecked = false,
+        data = "ADD_NEW"
+      )
+    )
+
+    return entries.toTypedArray()
+  }
+
+  override fun onChoiceConfirmed(
+      preference: Preference,
+      entry: PreferenceChoices.Entry?,
+      position: Int,
+  ) {
+    when (entry?.data) {
+      "ADD_NEW" -> {
+        openFontPicker(preference)
+      }
+      null, "" -> {
+        TypefaceUtils.selectedTerminalCustomFont = null
+        Toast.makeText(preference.context, "Using default terminal font", Toast.LENGTH_SHORT).show()
+      }
+      else -> {
+        TypefaceUtils.selectedTerminalCustomFont = entry.data as String
+        Toast.makeText(preference.context, "Terminal font selected: ${entry.label}", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  private fun openFontPicker(preference: Preference) {
+    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+      type = "*/*"
+      addCategory(Intent.CATEGORY_OPENABLE)
+      putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-otf"))
+    }
+
+    try {
+      val activity = preference.context as? Activity
+      activity?.startActivityForResult(
+          Intent.createChooser(intent, "Select Font File"),
+          PICK_FONT_REQUEST
+      )
+    } catch (e: Exception) {
+      Toast.makeText(preference.context, "Error opening file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
   }
 }
 
