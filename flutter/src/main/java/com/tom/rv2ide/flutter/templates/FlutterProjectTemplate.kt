@@ -126,7 +126,7 @@ fun flutterProjectTemplate(): ProjectTemplate {
   return ProjectTemplate(
       emptyList(),
       R.string.template_flutter,
-      R.drawable.compose_empty_activity,
+      R.drawable.ic_flutter,
       listOf(
           TextFieldWidget(projectName),
           TextFieldWidget(packageName),

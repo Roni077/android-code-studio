@@ -70,7 +70,33 @@ private constructor(
       // make it readable and executable
       FileUtils.setFilePermissions("idesetupScript", script.absolutePath, "rwx")
 
+      // Extract fluttersetup.sh alongside idesetup.sh for Stage 11 (--with-flutter)
+      val flutterScript = File(tempDir, "fluttersetup.sh")
+      if (writeFlutterSetupScript(context, flutterScript)) {
+        FileUtils.setFilePermissions("fluttersetupScript", flutterScript.absolutePath, "rwx")
+      }
+
       return script
+    }
+
+    private fun writeFlutterSetupScript(context: Context, script: File): Boolean {
+      return try {
+        val cpuArch = IDEBuildConfigProvider.getInstance().cpuArch
+        if (cpuArch != CpuArch.AARCH64) return false
+        val assetName = try {
+          context.assets.open(ToolsManager.getCommonAsset("arm64/fluttersetup.sh")).close()
+          "arm64/fluttersetup.sh"
+        } catch (_: Exception) {
+          "arm64/fluttersetup"
+        }
+        context.assets.open(ToolsManager.getCommonAsset(assetName)).use { inputStream ->
+          FileOutputStream(script).use { outputStream -> inputStream.copyTo(outputStream) }
+        }
+        true
+      } catch (e: Exception) {
+        log.error("Failed to write fluttersetup script: {}", e.message, e)
+        false
+      }
     }
 
     private fun writeIdesetupScript(context: Context, script: File): Boolean {

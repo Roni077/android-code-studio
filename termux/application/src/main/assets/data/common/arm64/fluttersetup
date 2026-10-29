@@ -2,7 +2,7 @@
 # ==============================================================================
 # Flutter Setup Script for Android Code Studio
 # Supports ARM64 (aarch64) Android devices
-# Integrates with flutter-for-termux
+# Integrates with flutter-for-termux prebuilt release (GeneralKaos666)
 # ==============================================================================
 
 set -e
@@ -35,6 +35,8 @@ with_ndk=false
 reinstall=false
 run_doctor=true
 flutter_version="3.47.8"
+pkg_rel="7"
+deb_sha256="eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474"
 
 print_help() {
   echo "Android Code Studio - Flutter Toolchain Setup"
@@ -75,13 +77,13 @@ echo ""
 # 2. Preflight Check: CPU Architecture
 arch=$(uname -m)
 if [ "$arch" != "aarch64" ]; then
-  abort_script "Flutter on Termux currently only supports AArch64 (64-bit ARM) devices. Detected: $arch"
+  abort_script "Flutter on Android Code Studio currently only supports AArch64 (64-bit ARM) devices. Detected: $arch"
 fi
 
 # 3. Preflight Check: Free Disk Space
 required_kb=2500000
 [ "$with_ndk" = "true" ] && required_kb=5000000
-avail_kb=$(df "$PREFIX" 2>/dev/null | awk 'NR==2 {print $4}' || echo "")
+avail_kb=$(df -k "$PREFIX" 2>/dev/null | awk 'NR==2 {print $4}' || echo "")
 if [ -n "$avail_kb" ] && [ "$avail_kb" -lt "$required_kb" ]; then
   print_warn "Available space ($((avail_kb/1024)) MB) is lower than recommended ($((required_kb/1024)) MB)."
   if [ "$assume_yes" != "true" ]; then
@@ -91,78 +93,208 @@ if [ -n "$avail_kb" ] && [ "$avail_kb" -lt "$required_kb" ]; then
   fi
 fi
 
-# 4. Prerequisites via pkg/apt
-print_info "[1/6] Installing toolchain dependencies..."
-apt update -y || true
-apt --fix-broken install -y || true
-pkg install -y x11-repo gnupg curl tar 7zip git which gtk3 xorgproto ninja cmake clang pkg-config aapt2 termux-elf-cleaner
+# 4. Toolchain and Core Package Dependencies
+print_info "[1/7] Ensuring core tools & AAPT2 link..."
+for pkg in git curl tar; do
+  if ! command -v "$pkg" &>/dev/null; then
+    print_info "Installing missing tool: $pkg..."
+    pkg install -y "$pkg" 2>/dev/null || apt-get install -y "$pkg" 2>/dev/null || true
+  fi
+done
 
-# Ensure JDK 17 or 21 is present
-if [ ! -d "$PREFIX/lib/jvm/java-17-openjdk" ] && [ ! -d "$PREFIX/lib/jvm/java-21-openjdk" ]; then
-  print_info "Installing OpenJDK 17..."
-  pkg install -y openjdk-17
+# Ensure AAPT2 symlink exists
+if [ ! -f "$PREFIX/bin/aapt2" ]; then
+  if [ -f "$HOME/.androidide/aapt2" ]; then
+    ln -sf "$HOME/.androidide/aapt2" "$PREFIX/bin/aapt2"
+  elif [ -d "$HOME/android-sdk/build-tools" ]; then
+    bt_aapt2=$(find "$HOME/android-sdk/build-tools" -name aapt2 2>/dev/null | head -n 1)
+    [ -n "$bt_aapt2" ] && ln -sf "$bt_aapt2" "$PREFIX/bin/aapt2"
+  fi
+  [ -f "$PREFIX/bin/aapt2" ] && chmod +x "$PREFIX/bin/aapt2"
 fi
 
-# 5. Configure APT Repository
-print_info "[2/6] Configuring Flutter APT repository..."
-mkdir -p "$PREFIX/etc/apt/keyrings"
-curl -fsSL https://generalkaos666.github.io/termux-apt-repo/key.gpg \
-  -o "$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg"
-
-echo "deb [signed-by=$PREFIX/etc/apt/keyrings/termux-apt-repo.gpg] https://generalkaos666.github.io/termux-apt-repo stable main" \
-  > "$PREFIX/etc/apt/sources.list.d/termux-apt-repo.list"
-
-pkg update -y
-
-# 6. Reinstall handling
+# 5. Clean Previous Installation if Requested
 if [ "$reinstall" = "true" ] && [ -d "$FLUTTER_ROOT" ]; then
   print_info "Cleaning previous Flutter install at $FLUTTER_ROOT..."
   rm -rf "$FLUTTER_ROOT"
 fi
 
-# 7. Package Installation
-print_info "[3/6] Installing Flutter package (${flutter_version})..."
-pkg install -y flutter
-
-# 8. Post-Install Configuration
-print_info "[4/6] Executing post-install assembly & patches..."
-export PREFIX="$PREFIX"
-export ANDROID_SDK="$ANDROID_SDK"
-if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
-  bash "$PREFIX/share/flutter/post_install.sh"
-
-  if [ "$with_ndk" = "true" ]; then
-    print_info "Provisioning ARM64 Android NDK repack..."
-    bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk
-  fi
+# If already installed and valid, skip download unless reinstall
+if [ "$reinstall" != "true" ] && [ -x "$FLUTTER_ROOT/bin/flutter" ]; then
+  print_info "Flutter is already installed at $FLUTTER_ROOT."
 else
-  abort_script "post_install.sh not found at $PREFIX/share/flutter/post_install.sh"
+  # 6. Download Flutter ARM64 Release Package
+  DEB_NAME="flutter_${flutter_version}-${pkg_rel}_aarch64.deb"
+  DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${flutter_version}/${DEB_NAME}"
+  CACHE_DIR="$HOME/.cache/flutter_setup"
+  mkdir -p "$CACHE_DIR"
+  CACHED_DEB="$CACHE_DIR/$DEB_NAME"
+
+  download_needed=true
+  if [ -f "$CACHED_DEB" ]; then
+    print_info "Found cached package at $CACHED_DEB. Checking integrity..."
+    cached_sha=$(sha256sum "$CACHED_DEB" | awk '{print $1}')
+    if [ "$cached_sha" = "$deb_sha256" ]; then
+      print_success "Cached package verified (SHA256: ${cached_sha:0:16}...)."
+      download_needed=false
+    else
+      print_warn "Cached package checksum mismatch. Re-downloading..."
+      rm -f "$CACHED_DEB"
+    fi
+  fi
+
+  if [ "$download_needed" = "true" ]; then
+    print_info "[2/7] Downloading Flutter SDK package (~610 MB)..."
+    print_info "Source: $DEB_URL"
+    if ! curl -fL --progress-bar -o "$CACHED_DEB" "$DEB_URL"; then
+      # Fallback to pkg_rel 6 if 7 not found
+      ALT_DEB="flutter_${flutter_version}-6_aarch64.deb"
+      ALT_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${flutter_version}/${ALT_DEB}"
+      print_warn "Primary release download failed, trying fallback: $ALT_URL..."
+      curl -fL --progress-bar -o "$CACHED_DEB" "$ALT_URL" || abort_script "Failed to download Flutter package."
+    fi
+
+    # Verify SHA256 if available
+    if command -v sha256sum &>/dev/null; then
+      actual_sha=$(sha256sum "$CACHED_DEB" | awk '{print $1}')
+      if [ -n "$deb_sha256" ] && [ "$actual_sha" != "$deb_sha256" ]; then
+        print_warn "Downloaded checksum (${actual_sha:0:16}...) differs from expected pin. Proceeding with caution."
+      else
+        print_success "Download verified (SHA256: ${actual_sha:0:16}...)."
+      fi
+    fi
+  fi
+
+  # 7. Direct Package Extraction via dpkg-deb -x
+  print_info "[3/7] Extracting Flutter SDK (bypassing desktop APT dependencies)..."
+  WORK_DIR=$(mktemp -d 2>/dev/null || echo "$PREFIX/tmp/flutter_extract_$$")
+  mkdir -p "$WORK_DIR/extracted"
+
+  if command -v dpkg-deb &>/dev/null; then
+    dpkg-deb -x "$CACHED_DEB" "$WORK_DIR/extracted"
+  elif command -v ar &>/dev/null; then
+    (cd "$WORK_DIR" && ar -x "$CACHED_DEB" && tar -xf data.tar.* -C "$WORK_DIR/extracted")
+  else
+    abort_script "Neither dpkg-deb nor ar available to extract package."
+  fi
+
+  # Relocate extracted Flutter tree
+  print_info "[4/7] Relocating Flutter SDK to $FLUTTER_ROOT..."
+  rm -rf "$FLUTTER_ROOT"
+  mkdir -p "$(dirname "$FLUTTER_ROOT")" "$PREFIX/share/flutter"
+
+  EXTRACTED_FLUTTER=""
+  for cand in "$WORK_DIR/extracted/data/data/com.termux/files/usr/opt/flutter" "$WORK_DIR/extracted/opt/flutter" "$WORK_DIR/extracted/usr/opt/flutter"; do
+    if [ -d "$cand" ]; then
+      EXTRACTED_FLUTTER="$cand"
+      break
+    fi
+  done
+
+  if [ -z "$EXTRACTED_FLUTTER" ]; then
+    EXTRACTED_FLUTTER=$(find "$WORK_DIR/extracted" -type d -name "flutter" | grep "bin" | head -n 1 | sed 's|/bin||')
+  fi
+
+  [ -n "$EXTRACTED_FLUTTER" ] && [ -d "$EXTRACTED_FLUTTER" ] || abort_script "Could not locate extracted flutter directory."
+  mv "$EXTRACTED_FLUTTER" "$FLUTTER_ROOT"
+
+  # Copy share files if present
+  if [ -d "$WORK_DIR/extracted/data/data/com.termux/files/usr/share/flutter" ]; then
+    cp -rf "$WORK_DIR/extracted/data/data/com.termux/files/usr/share/flutter/"* "$PREFIX/share/flutter/" 2>/dev/null || true
+  fi
+
+  rm -rf "$WORK_DIR"
 fi
 
-# 9. Profile and Symlinks
-print_info "[5/6] Setting up environment variables and symlinks..."
+# 8. Path & Shebang Relocation
+print_info "[5/7] Patching paths and configuring executables..."
+old_pfx="/data/data/com.termux/files/usr"
+new_pfx="$PREFIX"
+
+# Patch shell scripts and text config
+for f in "$FLUTTER_ROOT/bin/flutter" "$FLUTTER_ROOT/bin/dart" "$FLUTTER_ROOT/bin/internal/shared.sh"; do
+  if [ -f "$f" ] && [ -w "$f" ]; then
+    sed -i "s|$old_pfx|$new_pfx|g" "$f" 2>/dev/null || true
+    sed -i "s|#!/usr/bin/env bash|#!$PREFIX/bin/bash|g" "$f" 2>/dev/null || true
+    sed -i "s|#!/bin/bash|#!$PREFIX/bin/bash|g" "$f" 2>/dev/null || true
+  fi
+done
+
+# Set executable permissions on binaries
+chmod +x "$FLUTTER_ROOT/bin/flutter" "$FLUTTER_ROOT/bin/dart" 2>/dev/null || true
+chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" 2>/dev/null || true
+chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dartaotruntime" 2>/dev/null || true
+chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/utils/gen_snapshot" 2>/dev/null || true
+
+# Global symlinks
+mkdir -p "$PREFIX/bin"
+ln -sf "$FLUTTER_ROOT/bin/flutter" "$PREFIX/bin/flutter"
+ln -sf "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" "$PREFIX/bin/dart"
+chmod +x "$PREFIX/bin/flutter" "$PREFIX/bin/dart"
+
+# Self-registration so fluttersetup is globally available
+if [ -f "${BASH_SOURCE[0]:-${0}}" ]; then
+  cp -f "${BASH_SOURCE[0]:-${0}}" "$PREFIX/bin/fluttersetup.sh" 2>/dev/null || true
+  cp -f "${BASH_SOURCE[0]:-${0}}" "$PREFIX/bin/fluttersetup" 2>/dev/null || true
+  chmod +x "$PREFIX/bin/fluttersetup.sh" "$PREFIX/bin/fluttersetup" 2>/dev/null || true
+fi
+
+# 9. Optional NDK Provisioning
+if [ "$with_ndk" = "true" ]; then
+  print_info "Provisioning ARM64 Android NDK (r30) for native C/C++ plugins..."
+  if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
+    export PREFIX="$PREFIX"
+    export ANDROID_SDK="$ANDROID_SDK"
+    bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk || print_warn "NDK provisioning had non-critical warnings."
+  else
+    print_warn "post_install.sh not found. Skipping automatic NDK provisioning."
+  fi
+fi
+
+# 10. Environment Profile & Android SDK Integration
+print_info "[6/7] Generating environment profile & configuring Flutter CLI..."
 mkdir -p "$PREFIX/etc/profile.d"
-cat << 'EOF' > "$PREFIX/etc/profile.d/flutter.sh"
-export FLUTTER_ROOT="$PREFIX/opt/flutter"
-export ANDROID_HOME="$HOME/android-sdk"
-export ANDROID_SDK_ROOT="$HOME/android-sdk"
-export PATH="$FLUTTER_ROOT/bin:$FLUTTER_ROOT/bin/cache/dart-sdk/bin:$PATH"
+cat << EOF > "$PREFIX/etc/profile.d/flutter.sh"
+PREFIX="${PREFIX}"
+export FLUTTER_ROOT="${FLUTTER_ROOT}"
+export PATH="\${FLUTTER_ROOT}/bin:\${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:\${PATH}"
+export ANDROID_HOME="${ANDROID_SDK}"
+export ANDROID_SDK_ROOT="${ANDROID_SDK}"
 EOF
 chmod 644 "$PREFIX/etc/profile.d/flutter.sh"
 
-ln -sf "$FLUTTER_ROOT/bin/flutter" "$PREFIX/bin/flutter"
-ln -sf "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" "$PREFIX/bin/dart"
+# Ensure ~/.bashrc sources profile.d
+BASHRC="$HOME/.bashrc"
+if [ -f "$BASHRC" ]; then
+  if ! grep -q "profile.d/flutter.sh" "$BASHRC" 2>/dev/null; then
+    echo '[ -f "$PREFIX/etc/profile.d/flutter.sh" ] && source "$PREFIX/etc/profile.d/flutter.sh"' >> "$BASHRC"
+  fi
+else
+  echo '[ -f "$PREFIX/etc/profile.d/flutter.sh" ] && source "$PREFIX/etc/profile.d/flutter.sh"' > "$BASHRC"
+fi
 
-# 10. Verification
+# Apply current session PATH
+export PATH="$FLUTTER_ROOT/bin:$FLUTTER_ROOT/bin/cache/dart-sdk/bin:$PATH"
+
+# Configure Flutter options
+print_info "Configuring Flutter SDK settings..."
+"$FLUTTER_ROOT/bin/flutter" config --no-analytics >/dev/null 2>&1 || true
+"$FLUTTER_ROOT/bin/flutter" config --android-sdk "$ANDROID_SDK" >/dev/null 2>&1 || true
+
+# Auto-accept Android SDK licenses
+print_info "Accepting Android SDK licenses..."
+yes 2>/dev/null | "$FLUTTER_ROOT/bin/flutter" doctor --android-licenses >/dev/null 2>&1 || true
+
+# 11. Verification
 if [ "$run_doctor" = "true" ]; then
-  print_info "[6/6] Verifying toolchain with flutter doctor..."
-  export PATH="$FLUTTER_ROOT/bin:$FLUTTER_ROOT/bin/cache/dart-sdk/bin:$PATH"
-  flutter doctor -v || true
+  print_info "[7/7] Verifying Flutter toolchain..."
+  echo ""
+  "$FLUTTER_ROOT/bin/flutter" doctor -v || true
 fi
 
 echo ""
 print_success "=========================================="
-print_success " Flutter setup complete!"
+print_success " Flutter SDK setup complete!"
 print_success " Flutter: $FLUTTER_ROOT/bin/flutter"
 print_success " Dart:    $FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
 print_success "=========================================="

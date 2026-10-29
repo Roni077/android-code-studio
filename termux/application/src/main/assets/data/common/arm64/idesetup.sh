@@ -579,5 +579,9 @@ if [ "$with_flutter" = "true" ]; then
     bash "$dir/fluttersetup.sh" "${flutter_args[@]}"
   elif [ -f "$PREFIX/bin/fluttersetup.sh" ]; then
     bash "$PREFIX/bin/fluttersetup.sh" "${flutter_args[@]}"
+  elif [ -f "$PREFIX/bin/fluttersetup" ]; then
+    bash "$PREFIX/bin/fluttersetup" "${flutter_args[@]}"
+  else
+    print_err "fluttersetup.sh not found in $dir or $PREFIX/bin!"
   fi
 fi
