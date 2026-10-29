@@ -93,6 +93,7 @@ include(
   
   ":core:actions",
   ":core:app",
+  ":flutter",
   ":ideconfigurations",
   ":core:common",
   ":core:indexing-api",

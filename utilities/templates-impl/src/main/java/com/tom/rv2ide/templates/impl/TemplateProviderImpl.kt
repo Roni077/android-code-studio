@@ -25,6 +25,7 @@ import com.tom.rv2ide.templates.impl.basicActivity.basicActivityProject
 import com.tom.rv2ide.templates.impl.bottomNavActivity.bottomNavActivityProject
 import com.tom.rv2ide.templates.impl.composeActivity.composeActivityProject
 import com.tom.rv2ide.templates.impl.emptyActivity.emptyActivityProject
+import com.tom.rv2ide.flutter.templates.flutterProjectTemplate
 import com.tom.rv2ide.templates.impl.navDrawerActivity.navDrawerActivityProject
 import com.tom.rv2ide.templates.impl.noActivity.noActivityProjectTemplate
 import com.tom.rv2ide.templates.impl.noAndroidXActivity.noAndroidXActivityProject
@@ -58,6 +59,7 @@ class TemplateProviderImpl : ITemplateProvider {
           tabbedActivityProject(),
           noAndroidXActivityProject(),
           composeActivityProject(),
+          flutterProjectTemplate(),
       )
 
   private fun initializeTemplates() {

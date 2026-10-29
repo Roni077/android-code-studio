@@ -23,7 +23,7 @@ import io.github.rosemoe.sora.text.CharPosition
 import io.github.rosemoe.sora.text.Content
 import io.github.rosemoe.sora.text.TextUtils
 
-internal open class BracketsNewlineHandler(
+open class BracketsNewlineHandler(
     val getIndentAdvance: (String?) -> Int,
     val useTab: () -> Boolean,
 ) : CStyleBracketsHandler() {

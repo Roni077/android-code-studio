@@ -32,4 +32,5 @@ enum class IdeSetupArgument(val argumentName: String, val requiresValue: Boolean
   SDK_VERSION("--sdk", true),
   JDK_VERSION("--jdk", true),
   NDK_VERSION("--ndk", false),
+  WITH_FLUTTER("--with-flutter"),
 }

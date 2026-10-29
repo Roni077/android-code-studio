@@ -25,6 +25,7 @@ pkgs="jq tar wget"
 jdk_version="17"
 ndk_version="0"
 ndk=false
+with_flutter=false
 
 
 # echo "This IDE SETUP FOR armeabi-v7a is hd=[$ndk_version] | from args=[$1, $2, $3]"
@@ -370,6 +371,10 @@ while [ $# -gt 0 ]; do
     shift
     with_cmdline=false
     ;;
+  -wf | --with-flutter)
+    shift
+    with_flutter=true
+    ;;
   -g | --with-git)
     shift
     pkgs+=" git"
@@ -562,3 +567,17 @@ setup_ndk
 
 rm -vf "$downloaded_manifest"
 print_success "Downloads completed. You are ready to go!"
+
+if [ "$with_flutter" = "true" ]; then
+  print_info "Initiating Flutter SDK setup..."
+  dir="$(cd "$(dirname "${BASH_SOURCE[0]:-${0:-.}}")" 2>/dev/null && pwd || echo ".")"
+  flutter_args=("-y")
+  if [ "$ndk" = "true" ]; then
+    flutter_args+=("-wn")
+  fi
+  if [ -f "$dir/fluttersetup.sh" ]; then
+    bash "$dir/fluttersetup.sh" "${flutter_args[@]}"
+  elif [ -f "$PREFIX/bin/fluttersetup.sh" ]; then
+    bash "$PREFIX/bin/fluttersetup.sh" "${flutter_args[@]}"
+  fi
+fi

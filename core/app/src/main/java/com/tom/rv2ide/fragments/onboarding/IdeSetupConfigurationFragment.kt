@@ -165,6 +165,9 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
     if (content.installOpenssh.isChecked) {
       args.setArgument(IdeSetupArgument.WITH_OPENSSH)
     }
+    if (content.installFlutter.isChecked) {
+      args.setArgument(IdeSetupArgument.WITH_FLUTTER)
+    }
     return args.toTypedArray()
   }
 

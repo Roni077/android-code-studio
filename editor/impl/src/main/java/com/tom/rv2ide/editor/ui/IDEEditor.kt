@@ -32,6 +32,7 @@ import com.tom.rv2ide.editor.adapters.CompletionListAdapter
 import com.tom.rv2ide.editor.api.IEditor
 import com.tom.rv2ide.editor.api.ILspEditor
 import com.tom.rv2ide.editor.language.IDELanguage
+import com.tom.rv2ide.editor.language.LanguageRegistry
 import com.tom.rv2ide.editor.language.groovy.GroovyLanguage
 import com.tom.rv2ide.editor.language.treesitter.TreeSitterLanguage
 import com.tom.rv2ide.editor.language.treesitter.TreeSitterLanguageProvider
@@ -670,13 +671,14 @@ constructor(
       return
     }
 
-    // 3 -> Check if we have ANTLR4 lexer-based languages for this file,
+    // 3 -> Check if we have lexer-based or registered languages for this file,
     //      return the language if we do, otherwise return an empty language
+    val ext = FileUtils.getFileExtension(file).lowercase()
     val lang =
-        when (FileUtils.getFileExtension(file)) {
+        when (ext) {
           "gradle" -> GroovyLanguage()
           // "c", "h", "cc", "cpp", "cxx" -> CppLanguage()
-          else -> EmptyLanguage()
+          else -> LanguageRegistry.forExtension(ext) ?: EmptyLanguage()
         }
 
     callback(lang)

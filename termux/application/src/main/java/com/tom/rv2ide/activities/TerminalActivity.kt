@@ -31,6 +31,7 @@ import com.termux.app.terminal.TermuxTerminalSessionActivityClient
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession
 import com.tom.rv2ide.terminal.IdeTerminalSessionClient
 import com.tom.rv2ide.terminal.IdesetupSession
+import com.tom.rv2ide.terminal.FlutterSetupSession
 import com.tom.rv2ide.utils.Environment
 import com.tom.rv2ide.utils.flashError
 import org.slf4j.LoggerFactory
@@ -57,6 +58,13 @@ class TerminalActivity : TermuxActivity() {
 
     const val EXTRA_ONBOARDING_RUN_IDESETUP = "ide.onboarding.terminal.runIdesetup"
     const val EXTRA_ONBOARDING_RUN_IDESETUP_ARGS = "ide.onboarding.terminal.runIdesetup.args"
+
+    const val EXTRA_RUN_FLUTTER_SETUP = "ide.terminal.runFlutterSetup"
+    const val EXTRA_RUN_FLUTTER_SETUP_ARGS = "ide.terminal.runFlutterSetup.args"
+
+    const val EXTRA_INITIAL_COMMAND = "ide.terminal.initialCommand"
+    const val EXTRA_WORKING_DIR = "ide.terminal.workingDir"
+    const val EXTRA_SESSION_NAME = "ide.terminal.sessionName"
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,6 +115,21 @@ class TerminalActivity : TermuxActivity() {
         addIdesetupSession(runIdesetupArgs)
         return
       }
+
+      val runFlutterSetup = intent.getBooleanExtra(EXTRA_RUN_FLUTTER_SETUP, false)
+      val flutterSetupArgs = intent.getStringArrayExtra(EXTRA_RUN_FLUTTER_SETUP_ARGS) ?: emptyArray()
+      if (runFlutterSetup) {
+        addFlutterSetupSession(flutterSetupArgs)
+        return
+      }
+
+      val initialCommand = intent.getStringExtra(EXTRA_INITIAL_COMMAND)
+      if (!initialCommand.isNullOrEmpty()) {
+        val targetDir = intent.getStringExtra(EXTRA_WORKING_DIR) ?: workingDir ?: Environment.HOME.absolutePath
+        val targetSessionName = intent.getStringExtra(EXTRA_SESSION_NAME) ?: sessionName ?: "Terminal"
+        addCommandSession(initialCommand, targetDir, targetSessionName)
+        return
+      }
     }
 
     super.setupTermuxSessionOnServiceConnected(
@@ -147,6 +170,57 @@ class TerminalActivity : TermuxActivity() {
           flashError(R.string.msg_cannot_create_terminal_session)
           return
         }
+
+    termuxTerminalSessionClient.setCurrentSession(session.terminalSession)
+  }
+
+  private fun addFlutterSetupSession(args: Array<String>) {
+    val script =
+        FlutterSetupSession.createScript(this)
+            ?: run {
+              log.error("Failed to add flutter setup session. Cannot create script.")
+              flashError(R.string.msg_cannot_create_terminal_session)
+              return
+            }
+
+    val session =
+        FlutterSetupSession.wrap(
+            termuxService.createTermuxSession(
+                /* executablePath = */ script.absolutePath,
+                /* arguments = */ args,
+                /* stdin = */ null,
+                /* workingDirectory = */ Environment.HOME.absolutePath,
+                /* isFailSafe = */ false,
+                /* sessionName = */ "Flutter Setup",
+            ),
+            script,
+        )
+
+    session
+        ?: run {
+          flashError(R.string.msg_cannot_create_terminal_session)
+          return
+        }
+
+    termuxTerminalSessionClient.setCurrentSession(session.terminalSession)
+  }
+
+  private fun addCommandSession(command: String, workingDir: String, sessionName: String) {
+    val shell = Environment.BASH_SHELL.absolutePath
+    val session =
+        termuxService.createTermuxSession(
+            /* executablePath = */ shell,
+            /* arguments = */ null,
+            /* stdin = */ "$command\n",
+            /* workingDirectory = */ workingDir,
+            /* isFailSafe = */ false,
+            /* sessionName = */ sessionName,
+        )
+
+    session ?: run {
+      flashError(R.string.msg_cannot_create_terminal_session)
+      return
+    }
 
     termuxTerminalSessionClient.setCurrentSession(session.terminalSession)
   }

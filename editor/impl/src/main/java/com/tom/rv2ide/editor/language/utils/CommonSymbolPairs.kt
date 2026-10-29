@@ -26,7 +26,7 @@ import io.github.rosemoe.sora.widget.SymbolPairMatch.SymbolPair.SymbolPairEx
  *
  * @author Akash Yadav
  */
-internal open class CommonSymbolPairs : SymbolPairMatch() {
+open class CommonSymbolPairs : SymbolPairMatch() {
 
   private val isSelected =
       object : SymbolPairEx {

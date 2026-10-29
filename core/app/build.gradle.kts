@@ -293,6 +293,7 @@ dependencies {
   implementation(projects.ideconfigurations)
   implementation(projects.core.actions)
   implementation(projects.core.common)
+  implementation(projects.flutter)
   implementation(projects.core.indexingApi)
   implementation(projects.core.indexingCore)
   implementation(projects.core.lspApi)

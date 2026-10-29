@@ -41,6 +41,7 @@ import com.tom.rv2ide.activities.CrashHandlerActivity
 import com.tom.rv2ide.activities.editor.IDELogcatReader
 import com.tom.rv2ide.buildinfo.BuildInfo
 import com.tom.rv2ide.editor.schemes.IDEColorSchemeProvider
+import com.tom.rv2ide.flutter.FlutterModuleInitializer
 import com.tom.rv2ide.eventbus.events.preferences.PreferenceChangeEvent
 import com.tom.rv2ide.events.AppEventsIndex
 import com.tom.rv2ide.events.EditorEventsIndex
@@ -152,6 +153,9 @@ class IDEApplication : TermuxApplication() {
     // initializeMemoryManagement()
     extractLoggerRuntime()
     extractJetbrainsMono()
+
+    // Initialize Flutter language & module support
+    FlutterModuleInitializer.init()
 
     // DISABLED: Plugin system completely disabled to prevent Tooling API issues
     // initializePluginSystem()

@@ -70,6 +70,12 @@ public final class Environment {
 
     public static File ACSIDE;
 
+    // Flutter & Dart
+    public static File FLUTTER_HOME;
+    public static File FLUTTER_BIN;
+    public static File DART_SDK;
+    public static File DART_BIN;
+
     public static void init(Context context) {
         ROOT = context.getFilesDir();
         PREFIX = mkdirIfNotExits(new File(ROOT, "usr"));
@@ -111,6 +117,12 @@ public final class Environment {
         // ACS
         ACSIDE = createFileIfNotExists(new File(PREFIX, "share/acside.properties"));
 
+        // Flutter & Dart paths
+        FLUTTER_HOME = new File(PREFIX, "opt/flutter");
+        FLUTTER_BIN = new File(FLUTTER_HOME, "bin/flutter");
+        DART_SDK = new File(FLUTTER_HOME, "bin/cache/dart-sdk");
+        DART_BIN = new File(DART_SDK, "bin/dart");
+
         setExecutable(JAVA);
         setExecutable(BASH_SHELL);
 
@@ -150,9 +162,19 @@ public final class Environment {
         env.put("ANDROID_USER_HOME", HOME.getAbsolutePath() + "/.android");
         env.put("JAVA_HOME", JAVA_HOME.getAbsolutePath());
         env.put("GRADLE_USER_HOME", GRADLE_USER_HOME.getAbsolutePath());
+        env.put("PREFIX", PREFIX.getAbsolutePath());
         env.put("SYSROOT", PREFIX.getAbsolutePath());
         env.put("PROJECTS", PROJECTS_DIR.getAbsolutePath());
         env.put("AT_ACSHOME_PROJECTS", AT_ACSHOME_PROJECTS.getAbsolutePath());
+        env.put("FLUTTER_ROOT", FLUTTER_HOME.getAbsolutePath());
+
+        String path = env.get("PATH");
+        String flutterPaths = FLUTTER_HOME.getAbsolutePath() + "/bin:" + DART_SDK.getAbsolutePath() + "/bin";
+        if (path != null && !path.isEmpty()) {
+            env.put("PATH", flutterPaths + ":" + path);
+        } else {
+            env.put("PATH", flutterPaths + ":" + BIN_DIR.getAbsolutePath() + ":/system/bin");
+        }
 
         env.put("LD_LIBRARY_PATH", LIB_DIR.getAbsolutePath() + ":" + 
                 new File(JAVA_HOME, "lib").getAbsolutePath());

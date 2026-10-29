@@ -266,6 +266,9 @@
   <string name="template_tabs">Tabbed Activity</string>
   <string name="template_no_activity">No Activity</string>
   <string name="template_no_AndroidX">No AndroidX</string>
+  <string
+    name="template_flutter"
+    translatable="false">Flutter Application</string>
 
   <!-- Files -->
   <string name="save">Save</string>
@@ -1002,6 +1005,17 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="action_install_git">Install Git</string>
   <string name="action_install_openssh">Install OpenSSH</string>
   <string name="action_install_ndk">Install AndroidNDK</string>
+  <string name="action_install_flutter">Install Flutter SDK (ARM64)</string>
+  <string name="title_flutter_setup">Flutter Setup</string>
+  <string name="title_flutter_run">Flutter Run</string>
+  <string name="title_flutter_hot_reload">Hot Reload</string>
+  <string name="title_flutter_hot_restart">Hot Restart</string>
+  <string name="title_flutter_build_apk">Build Flutter APK</string>
+  <string name="title_flutter_analyze">Analyze Project</string>
+  <string name="title_flutter_pub_get">Pub Get</string>
+  <string name="title_flutter_doctor">Flutter Doctor</string>
+  <string name="msg_prompt_install_flutter">This project requires the Flutter SDK. Would you like to install it now?</string>
+  <string name="msg_flutter_setup_desc">Install and configure Flutter SDK and Dart toolchains for Android Code Studio.</string>
   <string name="msg_terminal_new_sessions_disabled">Cannot create session. New sessions are disabled!</string>
   <string name="title_install_location_error">Install location error</string>
   <string name="title_unsupported_user">Unsupported user</string>

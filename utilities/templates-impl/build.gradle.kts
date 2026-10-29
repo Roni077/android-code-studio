@@ -37,6 +37,7 @@ dependencies {
 
   implementation(projects.core.common)
   implementation(projects.core.projects)
+  implementation(projects.flutter)
   implementation(projects.utilities.preferences)
   implementation(projects.utilities.shared)
 
