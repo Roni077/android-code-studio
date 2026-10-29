@@ -105,7 +105,7 @@ public class TermuxAppShellEnvironment {
         HashMap<String, String> environment = new HashMap<>();
 
         // Hardcode termux version
-        final var termuxVersionName = "0.118.0";
+        final var termuxVersionName = "0.118.1";
         final var termuxVersionCode = "118";
 
         ShellEnvironmentUtils.putToEnvIfSet(environment, ENV_TERMUX_VERSION, termuxVersionName);

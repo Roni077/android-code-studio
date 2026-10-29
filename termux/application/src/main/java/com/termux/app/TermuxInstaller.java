@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import static com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR;
+import static com.termux.shared.termux.TermuxConstants.TERMUX_BOOTSTRAP_SECOND_STAGE_SCRIPT_PATH;
 import static com.termux.shared.termux.TermuxConstants.TERMUX_PREFIX_DIR_PATH;
 import static com.termux.shared.termux.TermuxConstants.TERMUX_STAGING_PREFIX_DIR;
 import static com.termux.shared.termux.TermuxConstants.TERMUX_STAGING_PREFIX_DIR_PATH;
@@ -217,6 +218,21 @@ public final class TermuxInstaller {
 
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
+
+                    // Run second stage bootstrap script if it exists
+                    if (FileUtils.fileExists(TERMUX_BOOTSTRAP_SECOND_STAGE_SCRIPT_PATH, true)) {
+                        Logger.logInfo(LOG_TAG, "Running termux bootstrap second stage script: " + TERMUX_BOOTSTRAP_SECOND_STAGE_SCRIPT_PATH);
+                        try {
+                            Process process = new ProcessBuilder(TERMUX_BOOTSTRAP_SECOND_STAGE_SCRIPT_PATH)
+                                .directory(TERMUX_PREFIX_DIR)
+                                .redirectErrorStream(true)
+                                .start();
+                            process.waitFor();
+                            Logger.logInfo(LOG_TAG, "Finished running termux bootstrap second stage script.");
+                        } catch (Exception e) {
+                            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to run bootstrap second stage script", e);
+                        }
+                    }
 
                     activity.runOnUiThread(whenDone);
 

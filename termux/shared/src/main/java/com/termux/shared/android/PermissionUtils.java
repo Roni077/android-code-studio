@@ -35,6 +35,7 @@ import java.util.List;
 public class PermissionUtils {
 
     public static final int REQUEST_GRANT_STORAGE_PERMISSION = 1000;
+    public static final int REQUEST_GRANT_NOTIFICATION_PERMISSION = 1002;
 
     public static final int REQUEST_DISABLE_BATTERY_OPTIMIZATIONS = 2000;
     public static final int REQUEST_GRANT_DISPLAY_OVER_OTHER_APPS_PERMISSION = 2001;
@@ -51,6 +52,26 @@ public class PermissionUtils {
      */
     public static boolean checkPermission(@NonNull Context context, @NonNull String permission) {
         return checkPermissions(context, new String[]{permission});
+    }
+
+    /**
+     * Check if app has been granted POST_NOTIFICATIONS permission on Android 13+.
+     */
+    public static boolean checkNotificationPermission(@NonNull Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return checkPermission(context, Manifest.permission.POST_NOTIFICATIONS);
+        }
+        return true;
+    }
+
+    /**
+     * Request POST_NOTIFICATIONS permission on Android 13+.
+     */
+    public static boolean requestNotificationPermission(@NonNull Context context, int requestCode) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return requestPermission(context, Manifest.permission.POST_NOTIFICATIONS, requestCode);
+        }
+        return false;
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.annotation.SuppressLint;
+import android.content.pm.PackageManager;
 import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
@@ -267,6 +268,8 @@ public class TermuxActivity extends BaseIDEActivity implements ServiceConnection
         // Send the {@link TermuxConstants#BROADCAST_TERMUX_OPENED} broadcast to notify apps that Termux
         // app has been opened.
         TermuxUtils.sendTermuxOpenedBroadcast(this);
+
+        requestNotificationPermission();
     }
 
     @Override
@@ -840,6 +843,16 @@ public class TermuxActivity extends BaseIDEActivity implements ServiceConnection
         Logger.logVerbose(LOG_TAG, "onRequestPermissionsResult: requestCode: " + requestCode + ", permissions: "  + Arrays.toString(permissions) + ", grantResults: "  + Arrays.toString(grantResults));
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
             requestStoragePermission(true);
+        } else if (requestCode == PermissionUtils.REQUEST_GRANT_NOTIFICATION_PERMISSION) {
+            Logger.logInfo(LOG_TAG, "Notification permission result received: " + (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED));
+        }
+    }
+
+    public void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (!PermissionUtils.checkNotificationPermission(this)) {
+                PermissionUtils.requestNotificationPermission(this, PermissionUtils.REQUEST_GRANT_NOTIFICATION_PERMISSION);
+            }
         }
     }
 

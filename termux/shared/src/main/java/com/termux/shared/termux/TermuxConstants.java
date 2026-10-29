@@ -452,6 +452,11 @@ public final class TermuxConstants {
     /** Termux app $PREFIX/bin directory */
     public static final File TERMUX_BIN_PREFIX_DIR = new File(TERMUX_BIN_PREFIX_DIR_PATH);
 
+    /** Termux app bootstrap second stage script file path */
+    public static final String TERMUX_BOOTSTRAP_SECOND_STAGE_SCRIPT_PATH = TERMUX_BIN_PREFIX_DIR_PATH + "/termux-bootstrap-second-stage.sh";
+    /** Termux app bootstrap second stage script file */
+    public static final File TERMUX_BOOTSTRAP_SECOND_STAGE_SCRIPT_FILE = new File(TERMUX_BOOTSTRAP_SECOND_STAGE_SCRIPT_PATH);
+
 
     /** Termux app $PREFIX/etc directory path */
     public static final String TERMUX_ETC_PREFIX_DIR_PATH = TERMUX_PREFIX_DIR_PATH + "/etc"; // Default: "/data/data/com.termux/files/usr/etc"

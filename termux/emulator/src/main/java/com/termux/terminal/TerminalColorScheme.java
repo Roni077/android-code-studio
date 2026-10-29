@@ -115,7 +115,7 @@ public final class TerminalColorScheme {
     public void setCursorColorForBackground() {
         int backgroundColor = mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND];
         int brightness = TerminalColors.getPerceivedBrightnessOfColor(backgroundColor);
-        if (brightness > 0) {
+        if (brightness >= 0) {
             if (brightness < 130)
                 mDefaultColors[TextStyle.COLOR_INDEX_CURSOR] = 0xffffffff;
             else

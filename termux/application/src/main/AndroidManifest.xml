@@ -18,6 +18,10 @@
   <!-- Add specific foreground service type permissions for Android 14+ -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <!-- Android 13+ runtime notification permission -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Termux 0.118.1 SET_ALARM intent support -->
+  <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
 
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
