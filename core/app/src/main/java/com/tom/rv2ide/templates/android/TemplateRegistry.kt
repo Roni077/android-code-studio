@@ -35,6 +35,7 @@ object TemplateRegistry {
     register(ResponsiveActivity())
     register(GameActivity())
     register(NativeCpp())
+    register(FlutterApp())
     // register(FullscreenActivity())
     // register(TabbedActivity())
     // register(ScrollingActivity())

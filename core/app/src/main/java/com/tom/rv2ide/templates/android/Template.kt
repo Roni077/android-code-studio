@@ -30,6 +30,8 @@ import java.io.File
 interface Template {
   val displayName: String
   val templateType: TemplateType
+  val iconRes: Int
+    get() = 0
 
   /**
    * Configure global options when this template is selected. Override in specific templates to set

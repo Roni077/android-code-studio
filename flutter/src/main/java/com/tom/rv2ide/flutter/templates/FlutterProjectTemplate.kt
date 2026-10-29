@@ -111,6 +111,12 @@ fun flutterProjectTemplate(): ProjectTemplate {
     // 13. android/app/src/main/kotlin/<pkgPath>/MainActivity.kt
     executor.save(mainActivityKt(pkg), File(projectDir, "android/app/src/main/kotlin/$pkgPath/MainActivity.kt"))
 
+    val gradlew = File(projectDir, "android/gradlew")
+    if (gradlew.exists()) {
+      gradlew.setExecutable(true, false)
+    }
+    com.tom.rv2ide.flutter.project.FlutterProjectHelper.configureProjectForAndroidCS(projectDir)
+
     val data = ProjectTemplateData(
         name = rawName,
         projectDir = projectDir,

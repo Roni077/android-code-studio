@@ -233,9 +233,9 @@ class AtcWizardDialog : BottomSheetDialogFragment() {
 
   private fun proceedToOptionsPage(ctx: Context) {
     binding.root.post {
-      val templateName = "My${selectedTemplate?.displayName?.replace(" ", "")}" ?: "MyProject"
-      val packageSuffix =
-          "my${selectedTemplate?.displayName?.replace(" ", ".")?.lowercase()}" ?: "myproject"
+      val isFlutter = selectedTemplate?.displayName == "Flutter App"
+      val templateName = if (isFlutter) "my_flutter_app" else ("My${selectedTemplate?.displayName?.replace(" ", "")}" ?: "MyProject")
+      val packageSuffix = if (isFlutter) "my_flutter_app" else ("my${selectedTemplate?.displayName?.replace(" ", ".")?.lowercase()}" ?: "myproject")
 
       binding.projectNameInput.setText(templateName)
       binding.packageNameInput.setText("com.example.$packageSuffix")
@@ -245,6 +245,7 @@ class AtcWizardDialog : BottomSheetDialogFragment() {
       binding.nativeLanguageInputLayout.visibility = if (isNative) View.VISIBLE else View.GONE
       binding.ndkVersionButton.visibility = if (isNative) View.VISIBLE else View.GONE
       binding.ndkVersionButton.text = "NDK: ${Options.OPT_SELECTED_NDK_VERSION ?: "Auto"}"
+      binding.useKtsSwitch.visibility = if (isFlutter) View.GONE else View.VISIBLE
 
       SheetTransitions.slide(
           binding.wizardContainer,
@@ -514,11 +515,15 @@ class TemplateAdapter(
     holder.title.text = template.displayName
 
     val resId =
-        ctx.resources.getIdentifier(
-            template.javaClass.simpleName.replace(Regex("([a-z])([A-Z])"), "$1_$2").lowercase(),
-            "drawable",
-            ctx.packageName,
-        )
+        if (template.iconRes != 0) {
+          template.iconRes
+        } else {
+          ctx.resources.getIdentifier(
+              template.javaClass.simpleName.replace(Regex("([a-z])([A-Z])"), "$1_$2").lowercase(),
+              "drawable",
+              ctx.packageName,
+          )
+        }
     holder.image.setImageResource(if (resId != 0) resId else android.R.drawable.ic_menu_gallery)
     holder.card.setOnClickListener { onTemplateClick(template) }
   }
