@@ -232,6 +232,7 @@ setup_ndk_extractor() {
         NDK_OUTPUTDIR="$HOME/acs/$NDK_FILENAME"
         NDK_VERSION=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" -f version)   
         NDK_CHECKSUM=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" -f sha256)
+        NDK_ENCRYPTED=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" -f encrypted)
         
         echo
         npr "- Native Development Kit Manager - "
@@ -247,11 +248,19 @@ setup_ndk_extractor() {
             this_abort "Failed to download Native Development Kit, Version: $NDK_VERSION ! Please try again..."
         fi
         
-        mv "$NDK_OUTPUTDIR" "$OUTPUT_BIN" || this_abort "Something went wrong while renaming $NDK_FILENAME"
-        
-        npr "Setting up token chain..."
-        if chmod +x $OUTPUT_BIN; then
-            npr "Splendid. every operation succeeded"
+        local _dest="$HOME/android-sdk/ndk/$req_ver"
+        mkdir -p "$_dest"
+
+        if [[ "$NDK_ENCRYPTED" == "false" ]] || [[ "$NDK_FILENAME" == *.tar.xz ]]; then
+            npr "Extracting open NDK archive ($NDK_FILENAME)..."
+            tar -xJf "$NDK_OUTPUTDIR" -C "$_dest" --strip-components=1 || this_abort "Failed to extract NDK tarball"
+            touch "$OUTPUT_BIN"
+            chmod +x "$OUTPUT_BIN"
+            npr "Direct extraction succeeded"
+        else
+            mv "$NDK_OUTPUTDIR" "$OUTPUT_BIN" || this_abort "Something went wrong while renaming $NDK_FILENAME"
+            npr "Setting up token chain..."
+            chmod +x $OUTPUT_BIN
         fi
         return 0
     fi
@@ -260,6 +269,7 @@ setup_ndk_extractor() {
     NDK_URL=$(parse_ndk $ABI --geturl)   
     NDK_CHECKSUM=$(parse_ndk $ABI --getsha256)   
     NDK_VERSION=$(parse_ndk $ABI --getversion)   
+    NDK_ENCRYPTED=$(parse_ndk $ABI --getencrypted)   
        
     echo
     npr "- Native Development Kit Manager - "
@@ -269,8 +279,6 @@ setup_ndk_extractor() {
     npr "\t - NDK sha256sum: ${NDK_CHECKSUM:0:8}..."
     echo
     npr "Downloading $NDK_FILENAME..."
-    # Since it's ndk_extractor so the output of 
-    # The binary is $PREFIX/bin/ndk_extractor
     
     # First of all put it in home for verification
     output_bin="$HOME/ndk_extractor"
@@ -286,16 +294,22 @@ setup_ndk_extractor() {
         this_abort "Integrity failed! NDK archive is corrupted"
     else
         npr "Integrity check passed ! found valid ndk archive"
-        # moving archive to bin dir
-        mv "$output_bin" "$PREFIX/bin/"
     fi
     
-    # Update the output_bin variable
-    output_bin="$PREFIX/bin/ndk_extractor"
-    
-    npr "Setting up token chain..."
-    if chmod +x $output_bin; then
-        npr "Splendid. every operation succeeded"
+    local _dest="$HOME/android-sdk/ndk/$req_ver"
+    mkdir -p "$_dest"
+
+    if [[ "$NDK_ENCRYPTED" == "false" ]] || [[ "$NDK_FILENAME" == *.tar.xz ]]; then
+        npr "Extracting open NDK archive ($NDK_FILENAME)..."
+        tar -xJf "$output_bin" -C "$_dest" --strip-components=1 || this_abort "Failed to extract NDK tarball"
+        touch "$PREFIX/bin/ndk_extractor"
+        chmod +x "$PREFIX/bin/ndk_extractor"
+        rm -f "$output_bin"
+        npr "Direct extraction succeeded"
+    else
+        mv "$output_bin" "$PREFIX/bin/ndk_extractor"
+        npr "Setting up token chain..."
+        chmod +x "$PREFIX/bin/ndk_extractor"
     fi
 }
 
@@ -330,16 +344,19 @@ if [[ "$ndk" == "true" ]]; then
     done
     npr "Device architecture: $ARCH ✅"
     if ! ensure_ndk; then
-        if ndk_extractor $ARCH; then
+        if [ -f "$HOME/android-sdk/ndk/$ndkVersion/build/ndk-build" ]; then
+            npr "NDK binaries extracted successfully."
+        elif ndk_extractor $ARCH; then
             npr "Successfully extracted"
-            npr "Applying ndk patches..."
-            if echo '#!/bin/sh
-DIR=$(cd "$(dirname "$0")" && pwd)
-/data/data/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"' > "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"; then
-        npr "Successfully applied 2 patches"
-        fi
         else
             this_abort "Failed to extract NDK"
+        fi
+        npr "Applying ndk patches..."
+        if echo '#!/bin/sh
+DIR=$(cd "$(dirname "$0")" && pwd)
+/data/data/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"' > "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"; then
+            chmod +x "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"
+            npr "Successfully applied 2 patches"
         fi
     else
         npr "NDK:$ndkVersion Already installed! SETUP Skipped"

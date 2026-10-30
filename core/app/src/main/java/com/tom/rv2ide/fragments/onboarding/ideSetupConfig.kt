@@ -81,6 +81,8 @@ enum class NdkVersion(val version: String) {
 
   NDK_DISABLE("0"),
   NDK_28("28.2.13676358"),
+  NDK_29("29.0.14033849"),
+  NDK_30("30.0.16248370"),
   ;
 
   val displayName = if (version == "0") "Skip" else "NDK $version"
@@ -88,10 +90,28 @@ enum class NdkVersion(val version: String) {
   companion object {
 
     @JvmStatic
-    fun fromDisplayName(displayName: CharSequence) =
-        entries.first { it.displayName.contentEquals(displayName) }
+    fun fromDisplayName(displayName: CharSequence): NdkVersion =
+        entries.firstOrNull { it.displayName.contentEquals(displayName) } ?: NDK_DISABLE
 
     @JvmStatic
-    fun fromVersion(version: CharSequence) = entries.first { it.version.contentEquals(version) }
+    fun fromVersion(version: CharSequence): NdkVersion =
+        entries.firstOrNull { it.version.contentEquals(version) } ?: NDK_DISABLE
+
+    @JvmStatic
+    fun parseVersionFromDisplayName(displayName: CharSequence): String {
+      val text = displayName.toString().trim()
+      if (text.equals("Skip", ignoreCase = true) || text == "0") {
+        return "0"
+      }
+      val match = entries.firstOrNull { it.displayName.contentEquals(displayName) }
+      if (match != null) {
+        return match.version
+      }
+      return if (text.startsWith("NDK ", ignoreCase = true)) {
+        text.substring(4).trim()
+      } else {
+        text
+      }
+    }
   }
 }

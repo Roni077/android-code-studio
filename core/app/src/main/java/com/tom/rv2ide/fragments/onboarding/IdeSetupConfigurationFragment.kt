@@ -37,8 +37,11 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import androidx.core.content.getSystemService
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import com.github.appintro.SlidePolicy
 import com.tom.rv2ide.R
+import com.tom.rv2ide.activities.IdeConfigurations.AcsCommandInterface
+import com.tom.rv2ide.activities.IdeConfigurations.AcsProvider
 import com.tom.rv2ide.databinding.LayoutOnboardngSetupConfigBinding
 import com.tom.rv2ide.models.IdeSetupArgument
 import com.tom.rv2ide.resources.R.string
@@ -47,6 +50,9 @@ import com.tom.rv2ide.utils.ConnectionInfo
 import com.tom.rv2ide.utils.Environment
 import com.tom.rv2ide.utils.flashError
 import com.tom.rv2ide.utils.getConnectionInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * original @author Akash Yadav Modified by Mohammed-baqer-null @
@@ -126,16 +132,49 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
           )
       )
 
-      val ndkVersions =
+      val initialNdkVersions =
           NdkVersion.entries.map { if (it.version == "0") "Skip" else "NDK ${it.version}" }
-      ndkVersion.setText(ndkVersions[0])
+      ndkVersion.setText(initialNdkVersions[0])
       ndkVersion.setAdapter(
           ArrayAdapter(
               requireContext(),
               com.google.android.material.R.layout.m3_auto_complete_simple_item,
-              ndkVersions,
+              initialNdkVersions,
           )
       )
+
+      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+        try {
+          val result = AcsProvider.listAvailableVersions(
+              packageId = AcsProvider.PACKAGE_ANDROID_NATIVE_KIT,
+              arch = AcsCommandInterface.Architecture.ARM64_V8A,
+          )
+          if (result.success && result.output.isNotBlank()) {
+            val remoteVersions = result.output.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() && !it.startsWith("Available") }
+            if (remoteVersions.isNotEmpty()) {
+              val dynamicList = listOf("Skip") + remoteVersions.map { "NDK $it" }
+              withContext(Dispatchers.Main) {
+                if (isAdded && _content != null) {
+                  val currentSelected = ndkVersion.text?.toString()
+                  val adapter = ArrayAdapter(
+                      requireContext(),
+                      com.google.android.material.R.layout.m3_auto_complete_simple_item,
+                      dynamicList,
+                  )
+                  ndkVersion.setAdapter(adapter)
+                  if (!currentSelected.isNullOrBlank() && dynamicList.contains(currentSelected)) {
+                    ndkVersion.setText(currentSelected, false)
+                  }
+                }
+              }
+            }
+          }
+        } catch (_: Exception) {
+          // Keep bundled fallback
+        }
+      }
     }
 
     updateConnectionStatus()
@@ -154,9 +193,10 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
         IdeSetupArgument.JDK_VERSION,
         JdkVersion.fromDisplayName(content.jdkVersion.text).version,
     )
+    val selectedNdk = content.ndkVersion.text?.toString() ?: "Skip"
     args.setArgument(
         IdeSetupArgument.NDK_VERSION,
-        NdkVersion.fromDisplayName(content.ndkVersion.text).version,
+        NdkVersion.parseVersionFromDisplayName(selectedNdk),
     )
     args.setArgument(IdeSetupArgument.ASSUME_YES)
     if (content.installGit.isChecked) {

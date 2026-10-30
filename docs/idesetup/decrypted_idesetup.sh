@@ -25,6 +25,7 @@ pkgs="jq tar wget"
 jdk_version="17"
 ndk_version="0"
 ndk=false
+with_flutter=false
 
 
 # echo "This IDE SETUP FOR armeabi-v7a is hd=[$ndk_version] | from args=[$1, $2, $3]"
@@ -107,6 +108,7 @@ setup_ndk_extractor() {
         NDK_OUTPUTDIR="$HOME/acs/$NDK_FILENAME"
         NDK_VERSION=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$ndk_version" -f version)   
         NDK_CHECKSUM=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$ndk_version" -f sha256)
+        NDK_ENCRYPTED=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$ndk_version" -f encrypted)
         
         echo
         npr "- Native Development Kit Manager - "
@@ -117,7 +119,6 @@ setup_ndk_extractor() {
         echo
         npr "Downloading $NDK_FILENAME..."
     
-        # First of all put it in home for verification
         OUTPUT_BIN="$PREFIX/bin/ndk_extractor"
         
         # Run the acs system for downloading the native kit
@@ -125,12 +126,22 @@ setup_ndk_extractor() {
             this_abort "Failed to download Native Development Kit, Version: $NDK_VERSION ! Please try again..."
         fi
         
-        # Rename the native kit bundle
-        mv "$NDK_OUTPUTDIR" "$OUTPUT_BIN" || this_abort "Something went wrong while renaming $NDK_FILENAME"
-        
-        npr "Setting up token chain..."
-        if chmod +x $OUTPUT_BIN; then
-            npr "Splendid. every operation succeeded"
+        local _dest="$HOME/android-sdk/ndk/$ndk_version"
+        mkdir -p "$_dest"
+
+        if [[ "$NDK_ENCRYPTED" == "false" ]] || [[ "$NDK_FILENAME" == *.tar.xz ]]; then
+            npr "Extracting open NDK archive ($NDK_FILENAME)..."
+            tar -xJf "$NDK_OUTPUTDIR" -C "$_dest" --strip-components=1 || this_abort "Failed to extract NDK tarball"
+            touch "$OUTPUT_BIN"
+            chmod +x "$OUTPUT_BIN"
+            npr "Direct extraction succeeded"
+        else
+            # Rename the native kit bundle
+            mv "$NDK_OUTPUTDIR" "$OUTPUT_BIN" || this_abort "Something went wrong while renaming $NDK_FILENAME"
+            npr "Setting up token chain..."
+            if chmod +x $OUTPUT_BIN; then
+                npr "Splendid. every operation succeeded"
+            fi
         fi
     else
         npr "NDK Installation skipped."
@@ -154,7 +165,8 @@ setup_ndk() {
     npr "Running environmental check..."
     [ ! -f $PREFIX/bin/ndk_extractor ] && setup_ndk_extractor
     local ndkUrl="https://github.com/Mohammed-Baqer-null/AndroidIDE-Rv2-ndk/releases/download/v27.1.12297006/android-ndk-r27b-aarch64.zip"
-    local ndkVersion="28.2.13676358"
+    local ndkVersion="${ndk_version:-28.2.13676358}"
+    [ "$ndkVersion" = "0" ] && ndkVersion="28.2.13676358"
     local not_supported=("x86" "riscv64")
     local ndk_file_structure=""
     api_level_arch_detect
@@ -168,16 +180,19 @@ if [[ "$ndk_version" != "0" ]]; then
     done
     npr "Device architecture: $ARCH ✅"
     if ! ensure_ndk; then
-        if ndk_extractor $ARCH; then
+        if [ -f "$HOME/android-sdk/ndk/$ndkVersion/build/ndk-build" ]; then
+            npr "NDK binaries extracted successfully."
+        elif ndk_extractor $ARCH; then
             npr "Successfully extracted"
-            npr "Applying ndk patches..."
-            if echo '#!/bin/sh
-DIR=$(cd "$(dirname "$0")" && pwd)
-/data/data/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"' > "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"; then
-        npr "Successfully applied 2 patches"
-        fi
         else
             this_abort "Failed to extract NDK"
+        fi
+        npr "Applying ndk patches..."
+        if echo '#!/bin/sh
+DIR=$(cd "$(dirname "$0")" && pwd)
+/data/data/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"' > "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"; then
+            chmod +x "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"
+            npr "Successfully applied 2 patches"
         fi
     else
         npr "NDK:$ndk_version Already installed! SETUP Skipped"
@@ -369,6 +384,10 @@ while [ $# -gt 0 ]; do
   -c | --with-cmdline-tools)
     shift
     with_cmdline=false
+    ;;
+  -wf | --with-flutter)
+    shift
+    with_flutter=true
     ;;
   -g | --with-git)
     shift
@@ -562,3 +581,21 @@ setup_ndk
 
 rm -vf "$downloaded_manifest"
 print_success "Downloads completed. You are ready to go!"
+
+if [ "$with_flutter" = "true" ]; then
+  print_info "Initiating Flutter SDK setup..."
+  dir="$(cd "$(dirname "${BASH_SOURCE[0]:-${0:-.}}")" 2>/dev/null && pwd || echo ".")"
+  flutter_args=("-y")
+  if [ "$ndk" = "true" ]; then
+    flutter_args+=("-wn")
+  fi
+  if [ -f "$dir/fluttersetup.sh" ]; then
+    bash "$dir/fluttersetup.sh" "${flutter_args[@]}"
+  elif [ -f "$PREFIX/bin/fluttersetup.sh" ]; then
+    bash "$PREFIX/bin/fluttersetup.sh" "${flutter_args[@]}"
+  elif [ -f "$PREFIX/bin/fluttersetup" ]; then
+    bash "$PREFIX/bin/fluttersetup" "${flutter_args[@]}"
+  else
+    print_err "fluttersetup.sh not found in $dir or $PREFIX/bin!"
+  fi
+fi
