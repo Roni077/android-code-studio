@@ -53,7 +53,7 @@ The two scripts are **not identical**. ARMv7 (`armeabi-v7a`) is 143 lines longer
 | **Decrypted Script Size** | 14,250 bytes (564 lines) | 18,520 bytes (707 lines) |
 | **NDK Toolchain Method** | Calls external compiled `acs` CLI binary | Pure Bash implementation (`parse_ndk` + `jq`) |
 | **Download Resiliency** | Single `curl` download attempt | Built-in `download_and_extract_ndk` with **3-attempt retry loop** |
-| **NDK Manifest Endpoint** | `userio12/acs-build-system` | `AndroidIDE-Rv2Official/rv2ide-native-kit` |
+| **NDK Manifest Endpoint** | `Roni077/acs-build-system` | `AndroidIDE-Rv2Official/rv2ide-native-kit` |
 | **NDK Version Argument** | Dynamic version passed via `-n` / `--ndk` | Flag-based `-wn` / `--with-ndk` (hardcoded `28.2.13676358`) |
 | **Integrity Check** | Handled by `acs` CLI | Direct SHA-256 verification using `sha256sum \| awk` |
 
@@ -153,7 +153,7 @@ manifest="https://raw.githubusercontent.com/AndroidIDE-Rv2Official/androidide-rv
 ### 2. NDK Manifest Endpoints
 - **ARM64**:
   ```bash
-  NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/userio12/acs-build-system/refs/heads/main/acs-manifest.json"
+  NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/Roni077/acs-build-system/refs/heads/main/acs-manifest.json"
   PACKAGE_ID="android-native-kit"
   ```
 - **ARMv7**:

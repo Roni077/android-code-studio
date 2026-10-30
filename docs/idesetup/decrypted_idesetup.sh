@@ -18,7 +18,7 @@ install_dir=$HOME
 sdkver_org=35.0.2
 with_cmdline=true
 assume_yes=false
-manifest="https://raw.githubusercontent.com/userio12/acs-build-system/main/acs-manifest.json"
+manifest="https://raw.githubusercontent.com/Roni077/acs-build-system/main/acs-manifest.json"
 pkgm="pkg"
 pkg_curl="libcurl"
 pkgs="jq tar wget"
@@ -100,7 +100,7 @@ setup_ndk_extractor() {
     api_level_arch_detect
     
     if [[ "$ndk_version" != "0" ]]; then
-        NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/userio12/acs-build-system/refs/heads/main/acs-manifest.json"
+        NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/Roni077/acs-build-system/refs/heads/main/acs-manifest.json"
         PACKAGE_ID="android-native-kit"
             
         NDK_FILENAME=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$ndk_version" -f filename)

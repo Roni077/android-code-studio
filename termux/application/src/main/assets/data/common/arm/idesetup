@@ -17,7 +17,7 @@ install_dir=$HOME
 sdkver_org=35.0.2
 with_cmdline=true
 assume_yes=false
-manifest="https://raw.githubusercontent.com/userio12/acs-build-system/main/acs-manifest.json"
+manifest="https://raw.githubusercontent.com/Roni077/acs-build-system/main/acs-manifest.json"
 pkgm="pkg"
 pkg_curl="libcurl"
 pkgs="jq tar wget"
@@ -186,7 +186,7 @@ download_and_extract_ndk() {
 parse_ndk() {
     local arch="$1"
     local option="${2:---getfilename}" 
-    local url="https://raw.githubusercontent.com/userio12/acs-build-system/main/acs-manifest.json"
+    local url="https://raw.githubusercontent.com/Roni077/acs-build-system/main/acs-manifest.json"
 
     # normalize option to lowercase
     option=$(echo "$option" | tr '[:upper:]' '[:lower:]')
@@ -225,7 +225,7 @@ setup_ndk_extractor() {
     [ "$req_ver" = "0" ] && req_ver="28.2.13676358"
 
     if command -v acs >/dev/null 2>&1; then
-        NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/userio12/acs-build-system/refs/heads/main/acs-manifest.json"
+        NDK_MANIFEST_FILE_URL="https://raw.githubusercontent.com/Roni077/acs-build-system/refs/heads/main/acs-manifest.json"
         PACKAGE_ID="android-native-kit"
             
         NDK_FILENAME=$(acs -r $NDK_MANIFEST_FILE_URL -a "$ABI" -i "$PACKAGE_ID" -v "$req_ver" -f filename)
