@@ -23,7 +23,8 @@ import com.tom.rv2ide.resources.R
 enum class BackupCategory(
     val id: String,
     @StringRes val titleRes: Int,
-    @StringRes val summaryRes: Int
+    @StringRes val summaryRes: Int,
+    val isHeavyweight: Boolean = false
 ) {
     PREFERENCES(
         "preferences",
@@ -54,6 +55,36 @@ enum class BackupCategory(
         "recent_projects",
         R.string.backup_category_recent_projects,
         R.string.backup_category_recent_projects_summary
+    ),
+    TERMINAL_ENVIRONMENT(
+        "terminal_environment",
+        R.string.backup_category_terminal_environment,
+        R.string.backup_category_terminal_environment_summary,
+        isHeavyweight = true
+    ),
+    ANDROID_SDK(
+        "android_sdk",
+        R.string.backup_category_android_sdk,
+        R.string.backup_category_android_sdk_summary,
+        isHeavyweight = true
+    ),
+    FLUTTER_SDK(
+        "flutter_sdk",
+        R.string.backup_category_flutter_sdk,
+        R.string.backup_category_flutter_sdk_summary,
+        isHeavyweight = true
+    ),
+    GRADLE_CACHE(
+        "gradle_cache",
+        R.string.backup_category_gradle_cache,
+        R.string.backup_category_gradle_cache_summary,
+        isHeavyweight = true
+    ),
+    LSP_SERVERS(
+        "lsp_servers",
+        R.string.backup_category_lsp_servers,
+        R.string.backup_category_lsp_servers_summary,
+        isHeavyweight = true
     );
 
     companion object {

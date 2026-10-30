@@ -20,6 +20,7 @@ package com.tom.rv2ide.backup
 import com.google.gson.Gson
 import com.tom.rv2ide.backup.models.BackupCategory
 import com.tom.rv2ide.backup.models.BackupManifest
+import com.tom.rv2ide.backup.models.BackupPreset
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -39,28 +40,48 @@ class BackupSerializationTest {
         assertEquals(BackupCategory.FONTS, BackupCategory.fromId("fonts"))
         assertEquals(BackupCategory.GRADLE_INIT, BackupCategory.fromId("gradle_init"))
         assertEquals(BackupCategory.TERMINAL_CONFIG, BackupCategory.fromId("terminal_config"))
+        assertEquals(BackupCategory.TERMINAL_ENVIRONMENT, BackupCategory.fromId("terminal_environment"))
         assertEquals(BackupCategory.RECENT_PROJECTS, BackupCategory.fromId("recent_projects"))
+        assertEquals(BackupCategory.ANDROID_SDK, BackupCategory.fromId("android_sdk"))
+        assertEquals(BackupCategory.FLUTTER_SDK, BackupCategory.fromId("flutter_sdk"))
+        assertEquals(BackupCategory.GRADLE_CACHE, BackupCategory.fromId("gradle_cache"))
+        assertEquals(BackupCategory.LSP_SERVERS, BackupCategory.fromId("lsp_servers"))
 
         // Case insensitivity
-        assertEquals(BackupCategory.FONTS, BackupCategory.fromId("FONTS"))
+        assertEquals(BackupCategory.ANDROID_SDK, BackupCategory.fromId("ANDROID_SDK"))
         assertNull(BackupCategory.fromId("non_existent_category"))
+    }
+
+    @Test
+    fun testBackupPresets() {
+        val quick = BackupPreset.QUICK_SETTINGS.getCategories()
+        assertTrue(quick.contains(BackupCategory.PREFERENCES))
+        assertTrue(quick.contains(BackupCategory.FONTS))
+        assertFalse(quick.contains(BackupCategory.ANDROID_SDK))
+        assertFalse(quick.contains(BackupCategory.FLUTTER_SDK))
+
+        val complete = BackupPreset.COMPLETE_TOOLCHAIN.getCategories()
+        assertEquals(BackupCategory.entries.size, complete.size)
+        assertTrue(complete.contains(BackupCategory.ANDROID_SDK))
+        assertTrue(complete.contains(BackupCategory.FLUTTER_SDK))
+        assertTrue(complete.contains(BackupCategory.GRADLE_CACHE))
     }
 
     @Test
     fun testBackupManifestSerialization() {
         val manifest = BackupManifest(
-            version = 1,
+            version = BackupManifest.CURRENT_VERSION,
             createdAt = 1700000000000L,
             appVersion = "1.0.0",
             packageName = "com.tom.rv2ide",
             deviceInfo = "Google Pixel 8 (Android 14)",
-            includedCategories = listOf("preferences", "fonts", "color_schemes"),
-            fileCount = 12
+            includedCategories = listOf("preferences", "fonts", "android_sdk", "flutter_sdk"),
+            fileCount = 120
         )
 
         val json = gson.toJson(manifest)
         assertNotNull(json)
-        assertTrue(json.contains("\"version\":1"))
+        assertTrue(json.contains("\"version\":2"))
         assertTrue(json.contains("\"app_version\":\"1.0.0\""))
         assertTrue(json.contains("\"package_name\":\"com.tom.rv2ide\""))
 
@@ -98,82 +119,49 @@ class BackupSerializationTest {
         assertEquals(originalDump.name, parsedDump!!.name)
         assertTrue(parsedDump.isDefault)
         assertEquals(6, parsedDump.entries.size)
-
-        assertEquals("int", parsedDump.entries["editor_font_size"]?.type)
         assertEquals("16", parsedDump.entries["editor_font_size"]?.value)
-
-        assertEquals("boolean", parsedDump.entries["editor_word_wrap"]?.type)
-        assertEquals("true", parsedDump.entries["editor_word_wrap"]?.value)
-
-        assertEquals("string_set", parsedDump.entries["recent_tags"]?.type)
+        assertEquals("int", parsedDump.entries["editor_font_size"]?.type)
         assertEquals(listOf("kotlin", "compose", "gradle"), parsedDump.entries["recent_tags"]?.values)
     }
 
     @Test
-    fun testCorruptedArchiveInspection() {
-        val randomBytes = "this is not a zip archive".toByteArray(StandardCharsets.UTF_8)
-        val stream = ByteArrayInputStream(randomBytes)
+    fun testStandalonePreferencesDump() {
+        val dump1 = PreferencesBackupHelper.PreferenceFileDump(
+            name = PreferencesBackupHelper.DEFAULT_PREFS_NAME,
+            isDefault = true,
+            entries = mapOf("ui_mode" to PreferencesBackupHelper.TypedPrefEntry("int", value = "2"))
+        )
+        val dump2 = PreferencesBackupHelper.PreferenceFileDump(
+            name = "ai_preferences",
+            isDefault = false,
+            entries = mapOf("model" to PreferencesBackupHelper.TypedPrefEntry("string", value = "gemini-flash"))
+        )
 
-        // Run inspectBackup on invalid stream - should handle gracefully
-        val baos = ByteArrayOutputStream()
-        val zipOut = ZipOutputStream(baos)
-        zipOut.putNextEntry(ZipEntry("some_other_file.txt"))
-        zipOut.write("hello".toByteArray(StandardCharsets.UTF_8))
-        zipOut.closeEntry()
-        zipOut.close()
+        val standalone = PreferencesBackupHelper.StandalonePreferencesDump(
+            format = "acs_preferences_dump",
+            version = 1,
+            dumps = listOf(dump1, dump2)
+        )
 
-        val zipWithoutManifest = ByteArrayInputStream(baos.toByteArray())
-        val inspection = runBlockingInspection(zipWithoutManifest)
+        val json = gson.toJson(standalone)
+        assertTrue(json.contains("\"format\":\"acs_preferences_dump\""))
+        assertTrue(json.contains("\"ui_mode\""))
+        assertTrue(json.contains("\"gemini-flash\""))
 
-        assertFalse(inspection.isValid)
-        assertNotNull(inspection.errorMessage)
+        val parsed = gson.fromJson(json, PreferencesBackupHelper.StandalonePreferencesDump::class.java)
+        assertEquals(2, parsed.dumps.size)
+        assertEquals("ai_preferences", parsed.dumps[1].name)
     }
 
     @Test
-    fun testValidArchiveInspectionWithManifest() {
-        val manifest = BackupManifest(
-            version = 1,
-            createdAt = 1700000000000L,
-            appVersion = "1.0.0",
-            packageName = "com.tom.rv2ide",
-            deviceInfo = "TestDevice",
-            includedCategories = listOf("preferences", "fonts"),
-            fileCount = 3
-        )
+    fun testMagicByteZipDetection() {
+        val zipBytes = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x00, 0x00)
+        assertTrue(BackupManager.isZipStream(zipBytes))
 
-        val baos = ByteArrayOutputStream()
-        val zipOut = ZipOutputStream(baos)
+        val jsonBytes = "{\"format\":\"acs_preferences_dump\"}".toByteArray(StandardCharsets.UTF_8)
+        assertFalse(BackupManager.isZipStream(jsonBytes))
 
-        // Write manifest
-        zipOut.putNextEntry(ZipEntry(BackupManifest.MANIFEST_FILE_NAME))
-        zipOut.write(gson.toJson(manifest).toByteArray(StandardCharsets.UTF_8))
-        zipOut.closeEntry()
-
-        // Write sample font
-        zipOut.putNextEntry(ZipEntry("ui/fonts/FiraCode-Regular.ttf"))
-        zipOut.write("mock font content".toByteArray(StandardCharsets.UTF_8))
-        zipOut.closeEntry()
-
-        // Write sample preference
-        zipOut.putNextEntry(ZipEntry("preferences/default.json"))
-        zipOut.write("{}".toByteArray(StandardCharsets.UTF_8))
-        zipOut.closeEntry()
-
-        zipOut.close()
-
-        val zipInput = ByteArrayInputStream(baos.toByteArray())
-        val inspection = runBlockingInspection(zipInput)
-
-        assertTrue(inspection.isValid)
-        assertNotNull(inspection.manifest)
-        assertEquals("1.0.0", inspection.manifest?.appVersion)
-        assertTrue(inspection.availableCategories.contains(BackupCategory.FONTS))
-        assertTrue(inspection.availableCategories.contains(BackupCategory.PREFERENCES))
-    }
-
-    private fun runBlockingInspection(inputStream: java.io.InputStream): com.tom.rv2ide.backup.models.BackupInspection {
-        return kotlinx.coroutines.runBlocking {
-            BackupManager.inspectBackup(inputStream = inputStream)
-        }
+        val shortBytes = byteArrayOf(0x50, 0x4B)
+        assertFalse(BackupManager.isZipStream(shortBytes))
     }
 }

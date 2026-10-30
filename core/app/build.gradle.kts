@@ -295,6 +295,7 @@ dependencies {
   implementation(projects.core.projectdata)
   implementation(projects.ideconfigurations)
   implementation(projects.core.actions)
+  implementation(projects.core.backup)
   implementation(projects.core.common)
   implementation(projects.flutter)
   implementation(projects.core.indexingApi)

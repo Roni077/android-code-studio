@@ -21,5 +21,7 @@ data class BackupInspection(
     val isValid: Boolean,
     val manifest: BackupManifest? = null,
     val availableCategories: Set<BackupCategory> = emptySet(),
+    val isStandaloneJson: Boolean = false,
+    val preferenceFilesCount: Int = 0,
     val errorMessage: String? = null
 )

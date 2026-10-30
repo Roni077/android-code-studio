@@ -93,6 +93,7 @@ include(
   
   ":core:actions",
   ":core:app",
+  ":core:backup",
   ":flutter",
   ":ideconfigurations",
   ":core:common",

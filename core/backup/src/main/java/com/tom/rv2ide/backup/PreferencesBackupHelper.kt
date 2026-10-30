@@ -56,6 +56,13 @@ object PreferencesBackupHelper {
         @SerializedName("entries") val entries: Map<String, TypedPrefEntry>
     )
 
+    data class StandalonePreferencesDump(
+        @SerializedName("format") val format: String = "acs_preferences_dump",
+        @SerializedName("version") val version: Int = 1,
+        @SerializedName("created_at") val createdAt: Long = System.currentTimeMillis(),
+        @SerializedName("dumps") val dumps: List<PreferenceFileDump>
+    )
+
     /**
      * Discovers and exports all candidate SharedPreferences files into structured objects.
      */
@@ -88,7 +95,6 @@ object PreferencesBackupHelper {
         if (sharedPrefsDir.exists() && sharedPrefsDir.isDirectory) {
             sharedPrefsDir.listFiles { file -> file.extension == "xml" }?.forEach { file ->
                 val name = file.nameWithoutExtension
-                // Skip default prefs (already exported) and hardware-locked credentials
                 if (!name.endsWith("_preferences") && name != EXCLUDED_PREFS_GIT_CREDENTIALS) {
                     namesToExport.add(name)
                 }
@@ -113,6 +119,79 @@ object PreferencesBackupHelper {
         }
 
         return dumps
+    }
+
+    /**
+     * Serializes all preferences into a single formatted standalone JSON container.
+     */
+    fun exportAllPreferencesAsJson(
+        context: Context,
+        includeRecentProjects: Boolean = true
+    ): String {
+        val dumps = exportAllPreferences(context, includeRecentProjects)
+        val standalone = StandalonePreferencesDump(
+            format = "acs_preferences_dump",
+            version = 1,
+            createdAt = System.currentTimeMillis(),
+            dumps = dumps
+        )
+        return gson.toJson(standalone)
+    }
+
+    /**
+     * Restores preferences from a standalone JSON string.
+     * Supports both native ACS StandalonePreferencesDump and flat key-value maps (e.g. from Xed-Editor).
+     */
+    fun importAllPreferencesFromJson(context: Context, json: String): Boolean {
+        return try {
+            if (json.contains("\"format\"") && json.contains("\"acs_preferences_dump\"")) {
+                val standalone = gson.fromJson(json, StandalonePreferencesDump::class.java)
+                var success = true
+                for (dump in standalone.dumps) {
+                    if (!restorePreferences(context, dump, BackupCategory.entries.toSet())) {
+                        success = false
+                    }
+                }
+                success
+            } else {
+                // Fallback: flat key-value map (e.g. from Xed-Editor / custom export)
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(json, type)
+                val defaultPrefs = PreferenceManager.getDefaultSharedPreferences(context)
+                val editor = defaultPrefs.edit()
+
+                for ((key, value) in map) {
+                    if (value == null) continue
+                    when (value) {
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Number -> {
+                            // If integer representation equals double, store as int/long
+                            val d = value.toDouble()
+                            if (d == d.toLong().toDouble()) {
+                                if (d >= Int.MIN_VALUE && d <= Int.MAX_VALUE) {
+                                    editor.putInt(key, value.toInt())
+                                } else {
+                                    editor.putLong(key, value.toLong())
+                                }
+                            } else {
+                                editor.putFloat(key, value.toFloat())
+                            }
+                        }
+                        is String -> editor.putString(key, value)
+                        is List<*> -> {
+                            val strSet = value.filterIsInstance<String>().toSet()
+                            editor.putStringSet(key, strSet)
+                        }
+                        else -> editor.putString(key, value.toString())
+                    }
+                }
+                editor.apply()
+                true
+            }
+        } catch (e: Exception) {
+            log.error("Failed to import preferences from JSON", e)
+            false
+        }
     }
 
     /**
@@ -145,14 +224,8 @@ object PreferencesBackupHelper {
         return PreferenceFileDump(name, isDefault, typedEntries)
     }
 
-    /**
-     * Converts a PreferenceFileDump to formatted JSON string.
-     */
     fun toJson(dump: PreferenceFileDump): String = gson.toJson(dump)
 
-    /**
-     * Parses a PreferenceFileDump from JSON string.
-     */
     fun fromJson(json: String): PreferenceFileDump? {
         return try {
             gson.fromJson(json, PreferenceFileDump::class.java)
@@ -164,7 +237,6 @@ object PreferencesBackupHelper {
 
     /**
      * Restores preference entries into SharedPreferences using Editor.
-     * Guarantees synchronous in-memory update and persists to disk.
      */
     fun restorePreferences(
         context: Context,
@@ -179,11 +251,9 @@ object PreferencesBackupHelper {
             }
 
             val editor = prefs.edit()
-
             val shouldRestoreRecentProjects = selectedCategories.contains(BackupCategory.RECENT_PROJECTS)
 
             for ((key, entry) in dump.entries) {
-                // If this is atc_wizard_prefs and recent_projects was not selected, keep current value
                 if (dump.name == ATC_WIZARD_PREFS && key == "recent_projects" && !shouldRestoreRecentProjects) {
                     continue
                 }

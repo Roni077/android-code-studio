@@ -35,12 +35,15 @@ import com.google.android.material.snackbar.Snackbar
 import com.tom.rv2ide.R
 import com.tom.rv2ide.app.EdgeToEdgeIDEActivity
 import com.tom.rv2ide.backup.BackupManager
+import com.tom.rv2ide.backup.PreferencesBackupHelper
 import com.tom.rv2ide.backup.models.BackupCategory
 import com.tom.rv2ide.backup.ui.BackupDialogs
 import com.tom.rv2ide.databinding.ActivityPreferencesBinding
 import com.tom.rv2ide.fragments.IDEPreferencesFragment
+import com.tom.rv2ide.preferences.internal.GeneralPreferences
 import com.tom.rv2ide.preferences.IDEPreferences as prefs
 import com.tom.rv2ide.preferences.addRootPreferences
+import androidx.appcompat.app.AppCompatDelegate
 import com.tom.rv2ide.utils.Environment
 import kotlinx.coroutines.launch
 import java.io.File
@@ -65,6 +68,13 @@ class PreferencesActivity :
       registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) {
           executeBackup(uri, pendingBackupCategories)
+        }
+      }
+
+  private val exportSettingsJsonLauncher =
+      registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+          executeExportSettingsJson(uri)
         }
       }
 
@@ -133,15 +143,53 @@ class PreferencesActivity :
     }
   }
 
+  fun startExportSettingsJsonFlow() {
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val defaultFileName = "acs-settings-${sdf.format(Date())}.json"
+    exportSettingsJsonLauncher.launch(defaultFileName)
+  }
+
   fun startRestoreBackupFlow() {
     restoreBackupLauncher.launch(
-        arrayOf("application/zip", "application/octet-stream", "*/*")
+        arrayOf("application/zip", "application/json", "application/octet-stream", "*/*")
     )
   }
 
   fun startResetSettingsFlow() {
     BackupDialogs.showResetConfirmDialog(this) {
       executeReset()
+    }
+  }
+
+  private fun executeExportSettingsJson(uri: Uri) {
+    lifecycleScope.launch {
+      val progressDialog = MaterialAlertDialogBuilder(this@PreferencesActivity)
+          .setMessage(R.string.backup_creating_progress)
+          .setCancelable(false)
+          .show()
+
+      try {
+        val outputStream = contentResolver.openOutputStream(uri)
+        if (outputStream == null) {
+          progressDialog.dismiss()
+          Toast.makeText(this@PreferencesActivity, "Failed to open destination file", Toast.LENGTH_LONG).show()
+          return@launch
+        }
+
+        val json = PreferencesBackupHelper.exportAllPreferencesAsJson(this@PreferencesActivity)
+        outputStream.use { it.write(json.toByteArray(Charsets.UTF_8)) }
+        progressDialog.dismiss()
+
+        val size = getFileSize(uri)
+        val formattedSize = Formatter.formatFileSize(this@PreferencesActivity, size)
+        val fileName = getFileName(uri) ?: "settings.json"
+        val msg = getString(R.string.backup_create_success, fileName, formattedSize)
+        Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
+      } catch (e: Exception) {
+        progressDialog.dismiss()
+        val msg = getString(R.string.backup_create_failed, e.message ?: "Unknown error")
+        Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
+      }
     }
   }
 
@@ -196,7 +244,7 @@ class PreferencesActivity :
           return@launch
         }
 
-        val inspection = BackupManager.inspectBackup(this@PreferencesActivity, inputStream)
+        val inspection = BackupManager.inspectBackup(inputStream)
         progressDialog.dismiss()
 
         if (!inspection.isValid) {
@@ -208,8 +256,14 @@ class PreferencesActivity :
           return@launch
         }
 
-        BackupDialogs.showRestorePreviewDialog(this@PreferencesActivity, inspection) { selectedCategories ->
-          executeRestore(uri, selectedCategories)
+        if (inspection.isStandaloneJson) {
+          BackupDialogs.showJsonRestoreConfirmDialog(this@PreferencesActivity) {
+            executeRestore(uri, setOf(BackupCategory.PREFERENCES))
+          }
+        } else {
+          BackupDialogs.showRestorePreviewDialog(this@PreferencesActivity, inspection) { selectedCategories ->
+            executeRestore(uri, selectedCategories)
+          }
         }
       } catch (e: Exception) {
         progressDialog.dismiss()
@@ -237,6 +291,10 @@ class PreferencesActivity :
         progressDialog.dismiss()
 
         result.onSuccess {
+          // Hot reload UI theme immediately
+          val uiMode = GeneralPreferences.uiMode
+          AppCompatDelegate.setDefaultNightMode(uiMode)
+
           BackupDialogs.showRestartPrompt(
               this@PreferencesActivity,
               getString(R.string.backup_restore_success)

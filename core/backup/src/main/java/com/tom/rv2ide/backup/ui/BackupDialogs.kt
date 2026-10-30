@@ -21,6 +21,7 @@ import android.content.Context
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.tom.rv2ide.backup.models.BackupCategory
 import com.tom.rv2ide.backup.models.BackupInspection
+import com.tom.rv2ide.backup.models.BackupPreset
 import com.tom.rv2ide.resources.R
 import com.tom.rv2ide.utils.AppRestartDialog
 import java.text.SimpleDateFormat
@@ -30,6 +31,7 @@ object BackupDialogs {
 
     /**
      * Displays a dialog allowing the user to select which categories to include in the backup.
+     * Includes Quick Settings vs Complete Toolchain presets.
      */
     fun showBackupCategorySelector(
         context: Context,
@@ -37,7 +39,8 @@ object BackupDialogs {
     ) {
         val categories = BackupCategory.entries.toTypedArray()
         val itemLabels = categories.map { context.getString(it.titleRes) }.toTypedArray()
-        val checkedItems = BooleanArray(categories.size) { true }
+        // Default: Lightweight categories checked, heavyweight unchecked
+        val checkedItems = BooleanArray(categories.size) { index -> !categories[index].isHeavyweight }
 
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.backup_dialog_select_categories_title)
@@ -49,6 +52,10 @@ object BackupDialogs {
                 if (selected.isNotEmpty()) {
                     onConfirm(selected)
                 }
+                dialog.dismiss()
+            }
+            .setNeutralButton(R.string.preset_complete_toolchain) { dialog, _ ->
+                onConfirm(BackupPreset.COMPLETE_TOOLCHAIN.getCategories())
                 dialog.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -104,6 +111,24 @@ object BackupDialogs {
     }
 
     /**
+     * Prompts confirmation before restoring standalone JSON settings.
+     */
+    fun showJsonRestoreConfirmDialog(
+        context: Context,
+        onConfirm: () -> Unit
+    ) {
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.backup_json_restore_confirm_title)
+            .setMessage(R.string.backup_json_restore_confirm_message)
+            .setPositiveButton(R.string.btn_restore) { dialog, _ ->
+                onConfirm()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
      * Prompts the user before resetting IDE settings to factory defaults.
      */
     fun showResetConfirmDialog(
@@ -122,18 +147,17 @@ object BackupDialogs {
     }
 
     /**
-     * Prompts the user to restart the application to finalize restoring or resetting settings.
+     * Prompts the user to restart the application, with "Restart Now" and non-blocking "Later" options.
      */
     fun showRestartPrompt(context: Context, message: String) {
         MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.restart_app_title)
+            .setTitle(R.string.backup_applied_title)
             .setMessage(message)
             .setPositiveButton(R.string.backup_btn_restart_now) { dialog, _ ->
                 dialog.dismiss()
                 AppRestartDialog.restartApp(context)
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .setCancelable(false)
+            .setNegativeButton(R.string.backup_btn_restart_later, null)
             .show()
     }
 }

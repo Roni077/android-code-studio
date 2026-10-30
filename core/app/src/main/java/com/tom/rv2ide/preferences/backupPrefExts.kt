@@ -82,6 +82,18 @@ private class BackupGroup(
                 }
             )
         )
+        addPreference(
+            SimpleClickablePreference(
+                key = "idepref_export_settings_json",
+                title = R.string.backup_export_json_title,
+                summary = R.string.backup_export_json_summary,
+                icon = R.drawable.ic_backup,
+                onClick = { pref ->
+                    pref.context.findPreferencesActivity()?.startExportSettingsJsonFlow()
+                    true
+                }
+            )
+        )
     }
 }
 

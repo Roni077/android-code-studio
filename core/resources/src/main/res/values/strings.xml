@@ -1069,6 +1069,8 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="backup_group_title">Backup</string>
   <string name="backup_create_title">Create Backup</string>
   <string name="backup_create_summary">Export IDE settings, fonts, schemes, and configurations to a zip archive</string>
+  <string name="backup_export_json_title">Export Settings Only (.json)</string>
+  <string name="backup_export_json_summary">Export all IDE preferences into a portable JSON file</string>
   <string name="restore_group_title">Restore</string>
   <string name="backup_restore_action_title">Restore from Backup</string>
   <string name="backup_restore_action_summary">Select and restore IDE settings from an existing backup archive</string>
@@ -1089,9 +1091,19 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="backup_category_gradle">Gradle Init Scripts</string>
   <string name="backup_category_gradle_summary">Custom Gradle init.gradle scripts</string>
   <string name="backup_category_terminal">Terminal Configurations</string>
-  <string name="backup_category_terminal_summary">Terminal user shell configuration (.bashrc, .profile, .gitconfig)</string>
+  <string name="backup_category_terminal_summary">Terminal user shell configuration (.bashrc, .profile, .gitconfig, and .termux styling)</string>
+  <string name="backup_category_terminal_environment">Terminal Environment</string>
+  <string name="backup_category_terminal_environment_summary">User installed tools, scripts, and environment packages in $HOME</string>
   <string name="backup_category_recent_projects">Recent Projects History</string>
   <string name="backup_category_recent_projects_summary">List of recently opened projects and workspaces</string>
+  <string name="backup_category_android_sdk">Android SDK &amp; Tooling</string>
+  <string name="backup_category_android_sdk_summary">Platforms, build-tools, NDK, and CMake in ~/android-sdk (skips download on new versions)</string>
+  <string name="backup_category_flutter_sdk">Flutter &amp; Dart SDK</string>
+  <string name="backup_category_flutter_sdk_summary">Flutter framework, Dart SDK, and pub-cache packages</string>
+  <string name="backup_category_gradle_cache">Gradle Caches &amp; Dependencies</string>
+  <string name="backup_category_gradle_cache_summary">Downloaded libraries and Gradle wrappers in ~/.gradle</string>
+  <string name="backup_category_lsp_servers">Language Server Protocols (LSP)</string>
+  <string name="backup_category_lsp_servers_summary">Kotlin and C/C++ language server binaries</string>
 
   <!-- Backup Dialogs &amp; Status -->
   <string name="backup_dialog_select_categories_title">Select Data to Backup</string>
@@ -1111,4 +1123,13 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="backup_inspect_failed">Invalid backup file: manifest not found or corrupted</string>
   <string name="backup_reset_success">Settings reset to default. Please restart the IDE.</string>
   <string name="backup_btn_restart_now">Restart Now</string>
+  <string name="backup_btn_restart_later">Later</string>
+  <string name="backup_applied_title">Settings Restored &amp; Applied</string>
+  <string name="preset_quick_settings">Settings Only</string>
+  <string name="preset_complete_toolchain">Complete Toolchain</string>
+  <string name="backup_json_restore_confirm_title">Restore Settings?</string>
+  <string name="backup_json_restore_confirm_message">Restoring settings from JSON will update all IDE preferences. Changes will be applied immediately.</string>
+  <string name="action_restore_existing_toolchain">Already have a backup? Restore toolchains to skip downloading</string>
+  <string name="btn_restore">Restore</string>
+  <string name="msg_toolchains_restored">Toolchains restored successfully! No download required.</string>
 </resources>

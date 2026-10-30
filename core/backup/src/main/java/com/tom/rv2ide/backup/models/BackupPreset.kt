@@ -17,35 +17,21 @@
 
 package com.tom.rv2ide.backup.models
 
-import com.google.gson.annotations.SerializedName
+enum class BackupPreset {
+    QUICK_SETTINGS,
+    COMPLETE_TOOLCHAIN;
 
-data class BackupManifest(
-    @SerializedName("version")
-    val version: Int = CURRENT_VERSION,
-
-    @SerializedName("created_at")
-    val createdAt: Long = System.currentTimeMillis(),
-
-    @SerializedName("app_version")
-    val appVersion: String,
-
-    @SerializedName("package_name")
-    val packageName: String,
-
-    @SerializedName("device_info")
-    val deviceInfo: String,
-
-    @SerializedName("included_categories")
-    val includedCategories: List<String>,
-
-    @SerializedName("file_count")
-    val fileCount: Int = 0,
-
-    @SerializedName("checksum")
-    val checksum: String = ""
-) {
-    companion object {
-        const val CURRENT_VERSION = 1
-        const val MANIFEST_FILE_NAME = "backup_manifest.json"
+    fun getCategories(): Set<BackupCategory> {
+        return when (this) {
+            QUICK_SETTINGS -> setOf(
+                BackupCategory.PREFERENCES,
+                BackupCategory.COLOR_SCHEMES,
+                BackupCategory.FONTS,
+                BackupCategory.GRADLE_INIT,
+                BackupCategory.TERMINAL_CONFIG,
+                BackupCategory.RECENT_PROJECTS
+            )
+            COMPLETE_TOOLCHAIN -> BackupCategory.entries.toSet()
+        }
     }
 }
