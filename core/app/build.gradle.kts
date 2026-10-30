@@ -43,7 +43,7 @@ buildscript {
 }
 
 tasks.configureEach {
-    if (name.contains("desugar", ignoreCase = true)) {
+    if (name.startsWith("l8DexDesugarLib", ignoreCase = true)) {
         enabled = false
     }
 }
@@ -288,6 +288,8 @@ dependencies {
   implementation(libs.composite.desugaringCore)
   // implementation(libs.composite.javapoet)
   implementation(files(rootProject.file("composite-builds/build-deps/libs/javapoet.jar")))
+  implementation(files(rootProject.file("composite-builds/build-deps/libs/java-compiler.jar")))
+  implementation(files(rootProject.file("composite-builds/build-deps/libs/jdk-compiler.jar")))
 
   // Local projects here
   implementation(projects.core.projectdata)

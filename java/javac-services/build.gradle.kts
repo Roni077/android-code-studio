@@ -36,7 +36,8 @@ android {
 }
 
 dependencies {
-    api(libs.composite.javac)
+    api(files(rootProject.file("composite-builds/build-deps/libs/java-compiler.jar")))
+    api(files(rootProject.file("composite-builds/build-deps/libs/jdk-compiler.jar")))
 
     implementation(libs.common.kotlin)
     implementation(libs.common.utilcode)

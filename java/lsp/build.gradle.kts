@@ -71,7 +71,9 @@ dependencies {
   implementation(projects.editor.api)
   implementation(projects.java.javacServices)
 
-  implementation(libs.composite.javac)
+  // implementation(libs.composite.javac)
+  implementation(files(rootProject.file("composite-builds/build-deps/libs/java-compiler.jar")))
+  implementation(files(rootProject.file("composite-builds/build-deps/libs/jdk-compiler.jar")))
   // implementation(libs.composite.javapoet)
   // implementation(libs.composite.jaxp)
   // implementation(libs.composite.jdkJdeps)

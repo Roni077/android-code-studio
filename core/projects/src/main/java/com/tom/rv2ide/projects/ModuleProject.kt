@@ -135,7 +135,11 @@ abstract class ModuleProject(
     for (path in paths) {
       // Use 'getCanonicalFile' just to be sure that caches are stored with correct keys
       // See JavacFileManager.getContainer(Path) for more details
-      CacheFSInfoSingleton.cache(CacheFSInfoSingleton.getCanonicalFile(path.toPath()))
+      try {
+        CacheFSInfoSingleton.cache(CacheFSInfoSingleton.getCanonicalFile(path.toPath()))
+      } catch (err: Throwable) {
+        log.warn("Failed to cache FS info for path: {}", path, err)
+      }
     }
 
     val topLevelClasses = JarFsClasspathReader().listClasses(paths).filter { it.isTopLevel }
