@@ -211,6 +211,7 @@ desugaring {
 
 
 dependencies {
+  testImplementation(libs.tests.junit)
   // debugImplementation(libs.common.leakcanary)
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
   implementation("org.tukaani:xz:1.9")

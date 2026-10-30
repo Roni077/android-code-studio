@@ -1062,4 +1062,53 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="idepref_editor_nav_style_auto">Auto (Responsive based on screen)</string>
   <string name="idepref_editor_nav_style_bottom">Bottom Navigation Bar</string>
   <string name="idepref_editor_nav_style_side_rail">Side Navigation Rail</string>
+
+  <!-- Backup &amp; Restore Strings -->
+  <string name="backup_restore_title">Backup &amp; Restore</string>
+  <string name="backup_restore_summary">Backup and restore IDE preferences, custom fonts, color schemes, and tooling configurations</string>
+  <string name="backup_group_title">Backup</string>
+  <string name="backup_create_title">Create Backup</string>
+  <string name="backup_create_summary">Export IDE settings, fonts, schemes, and configurations to a zip archive</string>
+  <string name="restore_group_title">Restore</string>
+  <string name="backup_restore_action_title">Restore from Backup</string>
+  <string name="backup_restore_action_summary">Select and restore IDE settings from an existing backup archive</string>
+  <string name="reset_group_title">Factory Reset</string>
+  <string name="backup_reset_title">Reset IDE Settings</string>
+  <string name="backup_reset_summary">Reset all IDE preferences and configurations to default values</string>
+  <string name="backup_about_group_title">About Backup &amp; Restore</string>
+  <string name="backup_about_info_title">Backup Information</string>
+  <string name="backup_about_info_summary">Backups are stored as standard .zip archives containing your preferences, fonts, color schemes, and configuration scripts. Hardware-bound credentials like Keystore tokens are excluded for security and cross-device portability.</string>
+
+  <!-- Backup Categories -->
+  <string name="backup_category_preferences">IDE Preferences &amp; Settings</string>
+  <string name="backup_category_preferences_summary">Editor options, UI themes, AI agent settings, compiler and LSP configurations</string>
+  <string name="backup_category_schemes">Custom Color Schemes</string>
+  <string name="backup_category_schemes_summary">User syntax highlight color schemes (.properties and .json)</string>
+  <string name="backup_category_fonts">Custom Fonts</string>
+  <string name="backup_category_fonts_summary">Imported editor fonts (.ttf and .otf)</string>
+  <string name="backup_category_gradle">Gradle Init Scripts</string>
+  <string name="backup_category_gradle_summary">Custom Gradle init.gradle scripts</string>
+  <string name="backup_category_terminal">Terminal Configurations</string>
+  <string name="backup_category_terminal_summary">Terminal user shell configuration (.bashrc, .profile, .gitconfig)</string>
+  <string name="backup_category_recent_projects">Recent Projects History</string>
+  <string name="backup_category_recent_projects_summary">List of recently opened projects and workspaces</string>
+
+  <!-- Backup Dialogs &amp; Status -->
+  <string name="backup_dialog_select_categories_title">Select Data to Backup</string>
+  <string name="backup_dialog_create_button">Create Backup</string>
+  <string name="backup_dialog_restore_title">Restore from Backup</string>
+  <string name="backup_dialog_restore_button">Restore Selected</string>
+  <string name="backup_dialog_restore_warning">Warning: Restoring will overwrite existing settings and configuration files. An app restart will be required to apply changes.</string>
+  <string name="backup_dialog_reset_title">Reset IDE Settings?</string>
+  <string name="backup_dialog_reset_message">Are you sure you want to reset all IDE settings to default? Your custom fonts and color schemes will be kept, but all preferences will revert to defaults. This action cannot be undone.</string>
+  <string name="backup_dialog_reset_button">Reset Settings</string>
+  <string name="backup_creating_progress">Creating backup archive...</string>
+  <string name="backup_create_success">Backup saved successfully: %1$s (%2$s)</string>
+  <string name="backup_create_failed">Failed to create backup: %1$s</string>
+  <string name="backup_restoring_progress">Restoring backup archive...</string>
+  <string name="backup_restore_success">Backup restored successfully. Please restart the IDE to apply changes.</string>
+  <string name="backup_restore_failed">Failed to restore backup: %1$s</string>
+  <string name="backup_inspect_failed">Invalid backup file: manifest not found or corrupted</string>
+  <string name="backup_reset_success">Settings reset to default. Please restart the IDE.</string>
+  <string name="backup_btn_restart_now">Restart Now</string>
 </resources>

@@ -22,6 +22,7 @@ import kotlinx.parcelize.Parcelize
 
 internal fun IDEPreferences.addRootPreferences() {
   addPreference(ConfigurationPreferences())
+  addPreference(BackupPreferencesGroup())
   addPreference(PrivacyPreferences())
   addPreference(DeveloperOptionsPreferences())
   addPreference(AboutPreferences())
@@ -40,6 +41,7 @@ class ConfigurationPreferences(
     addPreference(AIAgentPreferencesScreen())
     addPreference(BuildAndRunPreferences())
     addPreference(TermuxPreferences())
+    addPreference(BackupAndRestorePreferencesScreen())
   }
 }
 
