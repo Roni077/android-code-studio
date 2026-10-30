@@ -145,6 +145,39 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
 
       viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
         try {
+          val btResult = AcsProvider.listAvailableVersions(
+              packageId = AcsProvider.PACKAGE_ANDROID_BUILD_TOOLS,
+              arch = AcsCommandInterface.Architecture.ARM64_V8A,
+          )
+          if (btResult.success && btResult.output.isNotBlank()) {
+            val remoteBtVersions = btResult.output.lines()
+                .map { it.trim() }
+                .filter { it.isNotBlank() && !it.startsWith("Available") }
+            if (remoteBtVersions.isNotEmpty()) {
+              val dynamicBtList = remoteBtVersions.map { "SDK $it" }
+              withContext(Dispatchers.Main) {
+                if (isAdded && _content != null) {
+                  val currentSelected = sdkVersion.text?.toString()
+                  val adapter = ArrayAdapter(
+                      requireContext(),
+                      com.google.android.material.R.layout.m3_auto_complete_simple_item,
+                      dynamicBtList,
+                  )
+                  sdkVersion.setAdapter(adapter)
+                  if (!currentSelected.isNullOrBlank() && dynamicBtList.contains(currentSelected)) {
+                    sdkVersion.setText(currentSelected, false)
+                  } else {
+                    sdkVersion.setText(dynamicBtList[0], false)
+                  }
+                }
+              }
+            }
+          }
+        } catch (_: Exception) {
+          // Keep bundled fallback
+        }
+
+        try {
           val result = AcsProvider.listAvailableVersions(
               packageId = AcsProvider.PACKAGE_ANDROID_NATIVE_KIT,
               arch = AcsCommandInterface.Architecture.ARM64_V8A,
@@ -185,9 +218,10 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
   fun buildIdeSetupArguments(): Array<String> {
     val args = mutableListOf<String>()
     args.setArgument(IdeSetupArgument.INSTALL_DIR, Environment.HOME.absolutePath)
+    val selectedSdk = content.sdkVersion.text?.toString() ?: ""
     args.setArgument(
         IdeSetupArgument.SDK_VERSION,
-        SdkVersion.fromDisplayName(content.sdkVersion.text).version,
+        SdkVersion.parseVersionFromDisplayName(selectedSdk),
     )
     args.setArgument(
         IdeSetupArgument.JDK_VERSION,

@@ -32,9 +32,14 @@ FLUTTER_ROOT="${FLUTTER_ROOT:-$PREFIX/opt/flutter}"
 
 assume_yes=false
 with_ndk=false
+with_cmake=false
 reinstall=false
 run_doctor=true
 flutter_version="3.47.8"
+requested_ndk_version=""
+requested_cmake_version=""
+active_ndk_ver=""
+active_cmake_ver=""
 pkg_rel="7"
 deb_sha256="eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474"
 
@@ -43,19 +48,36 @@ print_help() {
   echo "Usage: ${0} [options]"
   echo ""
   echo "Options:"
-  echo "  -y,  --assume-yes      Run non-interactively without confirmation prompts"
-  echo "  -wn, --with-ndk        Also provision the ARM64 Android NDK (r30) for native plugins"
-  echo "       --reinstall       Clean existing Flutter directory before installing"
-  echo "       --no-doctor       Skip post-install flutter doctor verification"
-  echo "  -v,  --version <ver>   Specify Flutter version (default: 3.47.8)"
-  echo "  -h,  --help            Show this help message"
+  echo "  -y,  --assume-yes        Run non-interactively without confirmation prompts"
+  echo "  -wn, --with-ndk          Also provision the ARM64 Android NDK for native C/C++ plugins"
+  echo "       --ndk-version <ver> Specify specific NDK version (e.g. 29.0.14033849, 30.0.16248370)"
+  echo "  -wc, --with-cmake        Also provision on-device CMake"
+  echo "       --cmake-version <v> Specify specific CMake version (e.g. 3.31.6, 4.1.2)"
+  echo "       --reinstall         Clean existing Flutter directory before installing"
+  echo "       --no-doctor         Skip post-install flutter doctor verification"
+  echo "  -v,  --version <ver>     Specify Flutter version (default: 3.47.8)"
+  echo "  -h,  --help              Show this help message"
 }
 
 # 1. Parse Arguments
 while [ $# -gt 0 ]; do
   case "$1" in
     -y | --assume-yes) assume_yes=true; shift ;;
-    -wn | --with-ndk) with_ndk=true; shift ;;
+    -wn | --with-ndk) with_ndk=true; with_cmake=true; shift ;;
+    --ndk-version)
+      shift
+      with_ndk=true
+      with_cmake=true
+      requested_ndk_version="${1:-}"
+      shift
+      ;;
+    -wc | --with-cmake) with_cmake=true; shift ;;
+    --cmake-version)
+      shift
+      with_cmake=true
+      requested_cmake_version="${1:-}"
+      shift
+      ;;
     --reinstall) reinstall=true; shift ;;
     --no-doctor) run_doctor=false; shift ;;
     -v | --version)
@@ -132,9 +154,14 @@ else
 
   # Query ACS build system manifest (Roni077/acs-build-system) for dynamic package details
   ACS_MANIFEST_URL="https://raw.githubusercontent.com/Roni077/acs-build-system/main/acs-manifest.json"
-  if curl -sfL "$ACS_MANIFEST_URL" -o "$CACHE_DIR/acs-manifest.json" 2>/dev/null && command -v jq &>/dev/null; then
-    manifest_url=$(jq -r '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a") | .url' "$CACHE_DIR/acs-manifest.json" 2>/dev/null | head -n 1)
-    manifest_sha=$(jq -r '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a") | .sha256' "$CACHE_DIR/acs-manifest.json" 2>/dev/null | head -n 1)
+  MANIFEST_FILE="$CACHE_DIR/acs-manifest.json"
+  if curl -sfL "$ACS_MANIFEST_URL" -o "$MANIFEST_FILE" 2>/dev/null && command -v jq &>/dev/null; then
+    manifest_url=$(jq -r --arg ver "$flutter_version" '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .url' "$MANIFEST_FILE" 2>/dev/null | head -n 1)
+    manifest_sha=$(jq -r --arg ver "$flutter_version" '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .sha256' "$MANIFEST_FILE" 2>/dev/null | head -n 1)
+    if [ -z "$manifest_url" ] || [ "$manifest_url" = "null" ]; then
+      manifest_url=$(jq -r '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a") | .url' "$MANIFEST_FILE" 2>/dev/null | head -n 1)
+      manifest_sha=$(jq -r '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a") | .sha256' "$MANIFEST_FILE" 2>/dev/null | head -n 1)
+    fi
     if [ -n "$manifest_url" ] && [ "$manifest_url" != "null" ]; then
       DEB_URL="$manifest_url"
       [ -n "$manifest_sha" ] && [ "$manifest_sha" != "null" ] && deb_sha256="$manifest_sha"
@@ -252,27 +279,150 @@ if [ -f "${BASH_SOURCE[0]:-${0}}" ]; then
   chmod +x "$PREFIX/bin/fluttersetup.sh" "$PREFIX/bin/fluttersetup" 2>/dev/null || true
 fi
 
-# 9. Optional NDK Provisioning
-if [ "$with_ndk" = "true" ]; then
-  print_info "Provisioning ARM64 Android NDK (r30) for native C/C++ plugins..."
-  if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
-    export PREFIX="$PREFIX"
-    export ANDROID_SDK="$ANDROID_SDK"
-    bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk || print_warn "NDK provisioning had non-critical warnings."
-  else
-    print_warn "post_install.sh not found. Skipping automatic NDK provisioning."
+# 9. Companion Tools Provisioning (NDK & CMake)
+provision_companion_tools() {
+  local manifest_file="$1"
+  local target_ndk="$2"
+  local target_cmake="$3"
+
+  # 1. Provision CMake if requested
+  if [ "$with_cmake" = "true" ]; then
+    print_info "Provisioning ARM64 CMake for Flutter native builds..."
+    local cmake_ver="$target_cmake"
+    local cmake_url=""
+    local cmake_sha=""
+
+    if [ -f "$manifest_file" ] && command -v jq &>/dev/null; then
+      if [ -z "$cmake_ver" ] || [ "$cmake_ver" = "latest" ]; then
+        cmake_ver=$(jq -r '.cmake_versions[0] // empty' "$manifest_file" 2>/dev/null)
+      fi
+      if [ -n "$cmake_ver" ]; then
+        cmake_url=$(jq -r --arg ver "$cmake_ver" '.packages[] | select(.id=="android-cmake" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .url' "$manifest_file" 2>/dev/null | head -n 1)
+        cmake_sha=$(jq -r --arg ver "$cmake_ver" '.packages[] | select(.id=="android-cmake" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .sha256' "$manifest_file" 2>/dev/null | head -n 1)
+      fi
+    fi
+
+    [ -z "$cmake_ver" ] && cmake_ver="3.31.6"
+    [ -z "$cmake_url" ] && cmake_url="https://github.com/Roni077/acs-build-system/releases/download/v${cmake_ver}/cmake-${cmake_ver}-aarch64-linux-android.tar.xz"
+
+    local cmake_dest="$ANDROID_SDK/cmake/$cmake_ver"
+    if [ -x "$cmake_dest/bin/cmake" ]; then
+      print_info "CMake $cmake_ver already installed at $cmake_dest."
+    else
+      local cmake_archive="$CACHE_DIR/cmake-${cmake_ver}-aarch64.tar.xz"
+      print_info "Downloading CMake $cmake_ver..."
+      if curl -fL --progress-bar -o "$cmake_archive" "$cmake_url"; then
+        if [ -n "$cmake_sha" ] && command -v sha256sum &>/dev/null; then
+          local actual_sha=$(sha256sum "$cmake_archive" | awk '{print $1}')
+          if [ "$actual_sha" = "$cmake_sha" ]; then
+            print_success "CMake archive verified (SHA256: ${actual_sha:0:16}...)."
+          fi
+        fi
+        mkdir -p "$cmake_dest"
+        print_info "Extracting CMake to $cmake_dest..."
+        tar -xf "$cmake_archive" -C "$cmake_dest" --strip-components=1 2>/dev/null || tar -xf "$cmake_archive" -C "$cmake_dest"
+        chmod +x "$cmake_dest/bin/"* 2>/dev/null || true
+        print_success "CMake $cmake_ver provisioned."
+      else
+        print_warn "Failed to download CMake from $cmake_url. Attempting package manager..."
+        pkg install -y cmake ninja 2>/dev/null || true
+      fi
+    fi
+
+    # Symlink to PREFIX/bin and ensure ninja is present
+    mkdir -p "$PREFIX/bin"
+    [ -f "$cmake_dest/bin/cmake" ] && ln -sf "$cmake_dest/bin/cmake" "$PREFIX/bin/cmake"
+    [ -f "$cmake_dest/bin/ninja" ] && ln -sf "$cmake_dest/bin/ninja" "$PREFIX/bin/ninja"
+    if ! command -v ninja &>/dev/null; then
+      pkg install -y ninja 2>/dev/null || apt-get install -y ninja 2>/dev/null || true
+    fi
+    active_cmake_ver="$cmake_ver"
   fi
-fi
+
+  # 2. Provision NDK if requested
+  if [ "$with_ndk" = "true" ]; then
+    print_info "Provisioning ARM64 Android NDK for Flutter native plugins..."
+    local ndk_ver="$target_ndk"
+    local ndk_url=""
+    local ndk_sha=""
+
+    if [ -f "$manifest_file" ] && command -v jq &>/dev/null; then
+      if [ -z "$ndk_ver" ] || [ "$ndk_ver" = "latest" ]; then
+        ndk_ver=$(jq -r '.ndk_versions[0] // empty' "$manifest_file" 2>/dev/null)
+      fi
+      if [ -n "$ndk_ver" ]; then
+        ndk_url=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .url' "$manifest_file" 2>/dev/null | head -n 1)
+        ndk_sha=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .sha256' "$manifest_file" 2>/dev/null | head -n 1)
+      fi
+    fi
+
+    [ -z "$ndk_ver" ] && ndk_ver="29.0.14033849"
+    if [ -z "$ndk_url" ]; then
+      ndk_url="https://github.com/Roni077/acs-build-system/releases/download/v${ndk_ver}/android-ndk-r29-aarch64-linux-android.tar.xz"
+    fi
+
+    local ndk_dest="$ANDROID_SDK/ndk/$ndk_ver"
+    if [ -f "$ndk_dest/build/ndk-build" ] || [ -f "$ndk_dest/ndk-build" ]; then
+      print_info "NDK $ndk_ver already installed at $ndk_dest."
+    else
+      local ndk_archive="$CACHE_DIR/android-ndk-${ndk_ver}-aarch64.tar.xz"
+      print_info "Downloading NDK $ndk_ver..."
+      if curl -fL --progress-bar -o "$ndk_archive" "$ndk_url"; then
+        if [ -n "$ndk_sha" ] && command -v sha256sum &>/dev/null; then
+          local actual_sha=$(sha256sum "$ndk_archive" | awk '{print $1}')
+          if [ "$actual_sha" = "$ndk_sha" ]; then
+            print_success "NDK archive verified (SHA256: ${actual_sha:0:16}...)."
+          fi
+        fi
+        mkdir -p "$ndk_dest"
+        print_info "Extracting NDK to $ndk_dest..."
+        tar -xJf "$ndk_archive" -C "$ndk_dest" --strip-components=1 2>/dev/null || tar -xJf "$ndk_archive" -C "$ndk_dest"
+        print_success "NDK $ndk_ver extracted."
+      else
+        print_warn "Direct NDK download failed from $ndk_url. Checking post_install.sh fallback..."
+        if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
+          bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk || true
+        fi
+      fi
+    fi
+
+    # Ensure ndk-build launcher and permissions
+    if [ -d "$ndk_dest" ]; then
+      cat << 'EOF_NDK' > "$ndk_dest/ndk-build"
+#!/bin/sh
+DIR=$(cd "$(dirname "$0")" && pwd)
+exec /data/data/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"
+EOF_NDK
+      chmod +x "$ndk_dest/ndk-build"
+      chmod +x "$ndk_dest/build/ndk-build" 2>/dev/null || true
+      ln -sf "$ndk_dest" "$ANDROID_SDK/ndk-bundle" 2>/dev/null || true
+    fi
+    active_ndk_ver="$ndk_ver"
+  fi
+}
+
+provision_companion_tools "$MANIFEST_FILE" "$requested_ndk_version" "$requested_cmake_version"
 
 # 10. Environment Profile & Android SDK Integration
 print_info "[6/7] Generating environment profile & configuring Flutter CLI..."
 mkdir -p "$PREFIX/etc/profile.d"
+
+cmake_path_entry=""
+[ -n "$active_cmake_ver" ] && cmake_path_entry=":${ANDROID_SDK}/cmake/${active_cmake_ver}/bin"
+
+ndk_env_entries=""
+if [ -n "$active_ndk_ver" ]; then
+ndk_env_entries="export ANDROID_NDK_HOME=\"\${ANDROID_SDK}/ndk/${active_ndk_ver}\"
+export NDK_HOME=\"\${ANDROID_SDK}/ndk/${active_ndk_ver}\""
+fi
+
 cat << EOF > "$PREFIX/etc/profile.d/flutter.sh"
 PREFIX="${PREFIX}"
 export FLUTTER_ROOT="${FLUTTER_ROOT}"
-export PATH="\${FLUTTER_ROOT}/bin:\${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:\${PATH}"
 export ANDROID_HOME="${ANDROID_SDK}"
 export ANDROID_SDK_ROOT="${ANDROID_SDK}"
+${ndk_env_entries}
+export PATH="\${FLUTTER_ROOT}/bin:\${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:\${PREFIX}/bin${cmake_path_entry}:\${PATH}"
 EOF
 chmod 644 "$PREFIX/etc/profile.d/flutter.sh"
 
@@ -286,8 +436,12 @@ else
   echo '[ -f "$PREFIX/etc/profile.d/flutter.sh" ] && source "$PREFIX/etc/profile.d/flutter.sh"' > "$BASHRC"
 fi
 
-# Apply current session PATH
-export PATH="$FLUTTER_ROOT/bin:$FLUTTER_ROOT/bin/cache/dart-sdk/bin:$PATH"
+# Apply current session PATH and environment
+export ANDROID_HOME="$ANDROID_SDK"
+export ANDROID_SDK_ROOT="$ANDROID_SDK"
+[ -n "$active_ndk_ver" ] && export ANDROID_NDK_HOME="$ANDROID_SDK/ndk/$active_ndk_ver"
+[ -n "$active_ndk_ver" ] && export NDK_HOME="$ANDROID_SDK/ndk/$active_ndk_ver"
+export PATH="$FLUTTER_ROOT/bin:$FLUTTER_ROOT/bin/cache/dart-sdk/bin:$PREFIX/bin${cmake_path_entry}:$PATH"
 
 # Configure Flutter options
 print_info "Configuring Flutter SDK settings..."

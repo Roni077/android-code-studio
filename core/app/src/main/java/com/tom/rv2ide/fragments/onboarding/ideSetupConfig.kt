@@ -34,6 +34,10 @@ enum class SdkVersion(val version: String, val supportedArchs: Array<CpuArch>) {
   SDK_34_0_3("34.0.3", ARM_ONLY),
   SDK_34_0_4("34.0.4", ALL),
   SDK_35_0_1("35.0.1", ALL),
+  SDK_35_0_2("35.0.2", ALL),
+  SDK_36_0_0("36.0.0", ALL),
+  SDK_36_0_1("36.0.1", ALL),
+  SDK_37_0_0("37.0.0", ALL),
   ;
 
   val displayName = "SDK $version"
@@ -41,10 +45,25 @@ enum class SdkVersion(val version: String, val supportedArchs: Array<CpuArch>) {
   companion object {
     @JvmStatic
     fun fromDisplayName(displayName: CharSequence) =
-        entries.first { it.displayName.contentEquals(displayName) }
+        entries.firstOrNull { it.displayName.contentEquals(displayName) } ?: SDK_35_0_2
 
     @JvmStatic
-    fun fromVersion(version: CharSequence) = entries.first { it.version.contentEquals(version) }
+    fun fromVersion(version: CharSequence) =
+        entries.firstOrNull { it.version.contentEquals(version) } ?: SDK_35_0_2
+
+    @JvmStatic
+    fun parseVersionFromDisplayName(displayName: CharSequence): String {
+      val text = displayName.toString().trim()
+      val match = entries.firstOrNull { it.displayName.contentEquals(displayName) }
+      if (match != null) {
+        return match.version
+      }
+      return if (text.startsWith("SDK ", ignoreCase = true)) {
+        text.substring(4).trim()
+      } else {
+        text
+      }
+    }
   }
 }
 
