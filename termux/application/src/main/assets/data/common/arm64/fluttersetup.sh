@@ -130,6 +130,18 @@ else
   mkdir -p "$CACHE_DIR"
   CACHED_DEB="$CACHE_DIR/$DEB_NAME"
 
+  # Query ACS build system manifest (Roni077/acs-build-system) for dynamic package details
+  ACS_MANIFEST_URL="https://raw.githubusercontent.com/Roni077/acs-build-system/main/acs-manifest.json"
+  if curl -sfL "$ACS_MANIFEST_URL" -o "$CACHE_DIR/acs-manifest.json" 2>/dev/null && command -v jq &>/dev/null; then
+    manifest_url=$(jq -r '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a") | .url' "$CACHE_DIR/acs-manifest.json" 2>/dev/null | head -n 1)
+    manifest_sha=$(jq -r '.packages[] | select(.id=="flutter-sdk" and .architecture=="arm64-v8a") | .sha256' "$CACHE_DIR/acs-manifest.json" 2>/dev/null | head -n 1)
+    if [ -n "$manifest_url" ] && [ "$manifest_url" != "null" ]; then
+      DEB_URL="$manifest_url"
+      [ -n "$manifest_sha" ] && [ "$manifest_sha" != "null" ] && deb_sha256="$manifest_sha"
+      print_info "Resolved Flutter package from ACS build system manifest: $DEB_URL"
+    fi
+  fi
+
   download_needed=true
   if [ -f "$CACHED_DEB" ]; then
     print_info "Found cached package at $CACHED_DEB. Checking integrity..."

@@ -29,13 +29,14 @@ import com.tom.rv2ide.actions.ActionItem
 import com.tom.rv2ide.actions.hasRequiredData
 import com.tom.rv2ide.activities.TerminalActivity
 import com.tom.rv2ide.flutter.project.FlutterProjectHelper
+import com.tom.rv2ide.flutter.service.FlutterBuildManager
 import com.tom.rv2ide.projects.IProjectManager
 import com.tom.rv2ide.resources.R
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
-internal fun promptInstallFlutter(activity: Activity) {
+fun promptInstallFlutter(activity: Activity) {
   MaterialAlertDialogBuilder(activity)
       .setTitle(R.string.title_flutter_setup)
       .setMessage(R.string.msg_prompt_install_flutter)
@@ -148,14 +149,19 @@ class FlutterBuildApkAction(context: Context, override val order: Int) : BaseFlu
       return
     }
 
-    FlutterProjectHelper.configureProjectForAndroidCS(projectDir)
-
-    val intent = Intent(activity, TerminalActivity::class.java).apply {
-      putExtra(TerminalActivity.EXTRA_WORKING_DIR, projectDir.absolutePath)
-      putExtra(TerminalActivity.EXTRA_INITIAL_COMMAND, "flutter build apk --debug --no-tree-shake-icons")
-      putExtra(TerminalActivity.EXTRA_SESSION_NAME, "Build APK")
+    if (FlutterBuildManager.isBuildInProgress) {
+      MaterialAlertDialogBuilder(activity)
+          .setTitle(R.string.title_cancel_build)
+          .setMessage("A Flutter build is currently in progress. Would you like to cancel it?")
+          .setPositiveButton(R.string.title_cancel_build) { _, _ ->
+            FlutterBuildManager.cancelBuild()
+          }
+          .setNegativeButton(android.R.string.cancel, null)
+          .show()
+      return
     }
-    activity.startActivity(intent)
+
+    FlutterBuildManager.startBuild(projectDir)
   }
 
   override fun getShowAsActionFlags(data: ActionData): Int {

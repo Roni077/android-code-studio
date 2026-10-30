@@ -28,7 +28,15 @@ import com.tom.rv2ide.actions.BaseBuildAction
 import com.tom.rv2ide.actions.getContext
 import com.tom.rv2ide.actions.markInvisible
 import com.tom.rv2ide.actions.openApplicationModuleChooser
+import com.tom.rv2ide.activities.editor.EditorHandlerActivity
+import com.tom.rv2ide.activities.editor.ProjectHandlerActivity
 import com.tom.rv2ide.app.BaseApplication
+import com.tom.rv2ide.flutter.actions.promptInstallFlutter
+import com.tom.rv2ide.flutter.project.FlutterProjectHelper
+import com.tom.rv2ide.flutter.service.FlutterBuildEventListener
+import com.tom.rv2ide.flutter.service.FlutterBuildManager
+import com.tom.rv2ide.projects.IProjectManager
+import com.tom.rv2ide.utils.flashSuccess
 import com.tom.rv2ide.lookup.Lookup
 import com.tom.rv2ide.managers.PreferenceManager
 import com.tom.rv2ide.models.ApkMetadata
@@ -91,11 +99,18 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
               return
             }
 
+    val projectDir = IProjectManager.getInstance().projectDir
+    val isFlutter = FlutterProjectHelper.isFlutterProject(projectDir)
+
     if (data.isBuildInProgress()) {
       label = context.getString(R.string.title_cancel_build)
       icon = ContextCompat.getDrawable(context, R.drawable.ic_stop_daemons)
     } else {
-      label = context.getString(R.string.quick_run_debug)
+      label = if (isFlutter) {
+        context.getString(R.string.title_flutter_build_apk)
+      } else {
+        context.getString(R.string.quick_run_debug)
+      }
       icon = ContextCompat.getDrawable(context, R.drawable.ic_run_outline)
     }
 
@@ -113,11 +128,93 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
   }
 
   override suspend fun execAction(data: ActionData): Boolean {
+    val projectDir = IProjectManager.getInstance().projectDir
+    val isFlutter = FlutterProjectHelper.isFlutterProject(projectDir)
+
     if (data.isBuildInProgress()) {
+      if (isFlutter && FlutterBuildManager.isBuildInProgress) {
+        return FlutterBuildManager.cancelBuild()
+      }
       return cancelBuild()
     }
 
+    if (isFlutter && projectDir != null) {
+      return quickRunFlutter(data, projectDir)
+    }
+
     return quickRun(data)
+  }
+
+  private fun quickRunFlutter(data: ActionData, projectDir: File): Boolean {
+    val activity = data.getActivity() as? EditorHandlerActivity
+    if (activity == null) {
+      log.error("Cannot run Flutter build: Activity is null")
+      return false
+    }
+
+    if (!FlutterProjectHelper.isFlutterInstalled()) {
+      promptInstallFlutter(activity)
+      return true
+    }
+
+    actionScope.launch(Dispatchers.Main) {
+      activity.saveAllResult()
+      activity.editorViewModel.isBuildInProgress = true
+      activity.content.bottomSheet.clearBuildOutput()
+      activity.appendBuildOutput(">>> Starting Flutter Build (Debug APK)...")
+      activity.setStatus("Building Flutter APK...")
+
+      val listener = object : FlutterBuildEventListener {
+        override fun onBuildStarted(command: String) {
+          activity.runOnUiThread {
+            activity.appendBuildOutput(command)
+          }
+        }
+
+        override fun onOutput(line: String) {
+          activity.runOnUiThread {
+            activity.appendBuildOutput(line)
+          }
+        }
+
+        override fun onPhaseChanged(phase: String) {
+          activity.runOnUiThread {
+            activity.setStatus(phase)
+          }
+        }
+
+        override fun onBuildSuccess(apkFile: File?) {
+          activity.runOnUiThread {
+            activity.editorViewModel.isBuildInProgress = false
+            activity.setStatus("")
+            activity.flashSuccess("Flutter build finished successfully!")
+            if (apkFile != null && apkFile.exists()) {
+              install(data, apkFile)
+            } else {
+              activity.flashError("Build finished but APK could not be located.")
+            }
+          }
+        }
+
+        override fun onBuildFailed(exitCode: Int, errorSummary: String?) {
+          activity.runOnUiThread {
+            activity.editorViewModel.isBuildInProgress = false
+            activity.setStatus("")
+            activity.flashError(errorSummary ?: "Flutter build failed with exit code $exitCode")
+          }
+        }
+      }
+
+      withContext(Dispatchers.IO) {
+        FlutterBuildManager.startBuild(
+            projectDir = projectDir,
+            commandArgs = listOf("build", "apk", "--debug", "--no-tree-shake-icons"),
+            listener = listener,
+        )
+      }
+    }
+
+    return true
   }
 
   private fun quickRun(data: ActionData): Boolean {
@@ -354,6 +451,7 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
     val context = getActivity()
     val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
     return context?.editorViewModel?.let { it.isInitializing || it.isBuildInProgress } == true ||
-        buildService?.isBuildInProgress == true
+        buildService?.isBuildInProgress == true ||
+        FlutterBuildManager.isBuildInProgress
   }
 }

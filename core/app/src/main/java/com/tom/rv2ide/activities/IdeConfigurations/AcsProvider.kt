@@ -381,6 +381,14 @@ object AcsProvider {
   const val ACS_BUILD_SYSTEM_REPONAME = "acs-build-system"
   const val ACS_BUILD_SYSTEM_REPOURL = "https://$REPO_HOST/$REPO_OWNER/$ACS_BUILD_SYSTEM_REPONAME"
 
+  /** Package IDs supported by ACS build system */
+  const val PACKAGE_ANDROID_SDK_CORE = "android-sdk-core"
+  const val PACKAGE_ANDROID_PLATFORM_TOOLS = "android-platform-tools"
+  const val PACKAGE_ANDROID_BUILD_TOOLS = "android-build-tools"
+  const val PACKAGE_ANDROID_NATIVE_KIT = "android-native-kit"
+  const val PACKAGE_ANDROID_CMAKE = "android-cmake"
+  const val PACKAGE_FLUTTER_SDK = "flutter-sdk"
+
   /** Manifest url getter function */
   val getManifestUrl: String = "${ACS_BUILD_SYSTEM_REPOURL}/raw/refs/heads/main/acs-manifest.json"
 
