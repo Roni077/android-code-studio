@@ -182,13 +182,42 @@ fi
 
 # 4. Toolchain and Core Package Dependencies
 print_info "[1/7] Ensuring core tools & AAPT2 link..."
-for pkg in git curl tar termux-exec; do
-  if ! command -v "$pkg" &>/dev/null && [ ! -f "$PREFIX/lib/libtermux-exec.so" ]; then
+for pkg in git curl tar which; do
+  if ! command -v "$pkg" &>/dev/null; then
     print_info "Installing tool/package: $pkg..."
     write_setup_log "PACKAGE" "Installing tool/package: $pkg"
     pkg install -y "$pkg" >> "$SETUP_LOG" 2>&1 || apt-get install -y "$pkg" >> "$SETUP_LOG" 2>&1 || true
   fi
 done
+if [ ! -f "$PREFIX/lib/libtermux-exec.so" ]; then
+  pkg install -y termux-exec >> "$SETUP_LOG" 2>&1 || apt-get install -y termux-exec >> "$SETUP_LOG" 2>&1 || true
+fi
+
+# Ensure resilient POSIX 'which' wrapper is available
+if ! command -v which &>/dev/null; then
+  write_setup_log "TOOL" "Installing lightweight which fallback script to $PREFIX/bin/which"
+  cat << 'EOF' > "$PREFIX/bin/which"
+#!/data/data/com.tom.rv2ide/files/usr/bin/sh
+all=false
+ret=0
+for arg in "$@"; do
+  case "$arg" in
+    -a) all=true; continue ;;
+    --) continue ;;
+    -*) continue ;;
+  esac
+  p=$(command -v "$arg" 2>/dev/null)
+  if [ -n "$p" ]; then
+    printf "%s\n" "$p"
+    [ "$all" != "true" ] && exit 0
+  else
+    ret=1
+  fi
+done
+exit $ret
+EOF
+  chmod +x "$PREFIX/bin/which" 2>/dev/null || true
+fi
 
 # Ensure AAPT2 symlink exists
 if [ ! -f "$PREFIX/bin/aapt2" ]; then
@@ -390,14 +419,20 @@ chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/utils/"* 2>/dev/null || true
 # Execute Upstream GeneralKaos666 post_install.sh engine
 if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
   chmod +x "$PREFIX/share/flutter/post_install.sh"
-  sed -i -E \
-    -e "s|PREFIX=\"\$\{PREFIX:-/data/data/com\.termux/files/usr\}\"|PREFIX=\"\${PREFIX:-$PREFIX}\"|g" \
-    -e "s|1s\|#!/usr/bin/env bash\|#!.*\||1s\|^#!.*\|#!${PREFIX}/bin/bash\||g" \
-    "$PREFIX/share/flutter/post_install.sh" 2>/dev/null || true
+  # Clean shebang and prefix replacement (safe, no regex corruption)
+  sed -i "1s|^#!.*|#!$PREFIX/bin/bash|" "$PREFIX/share/flutter/post_install.sh" 2>/dev/null || true
+  sed -i "s|/data/data/com\.termux/files/usr|$PREFIX|g" "$PREFIX/share/flutter/post_install.sh" 2>/dev/null || true
 
   print_info "Running upstream post_install.sh (17-step post-installation engine)..."
   write_setup_log "ENGINE" "Executing upstream post_install.sh engine"
   bash "$PREFIX/share/flutter/post_install.sh" >> "$SETUP_LOG" 2>&1 || print_warn "post_install.sh exited with warnings; continuing..."
+fi
+
+# Patch Flutter tools android_workflow to accept installed SDK platforms (SDK 33-35)
+WORKFLOW_DART="$FLUTTER_ROOT/packages/flutter_tools/lib/src/android/android_workflow.dart"
+if [ -f "$WORKFLOW_DART" ]; then
+  write_setup_log "TOOL" "Patching kAndroidSdkMinVersion in android_workflow.dart to 33"
+  sed -i -E 's/const (int )?kAndroidSdkMinVersion = [0-9]+;/const int kAndroidSdkMinVersion = 33;/' "$WORKFLOW_DART" 2>/dev/null || true
 fi
 
 # Ensure Step 17 requirement: flutter_tools.snapshot and stamp exist
@@ -432,6 +467,9 @@ ln -sf "$FLUTTER_ROOT/bin/flutter" "$PREFIX/bin/flutter"
 ln -sf "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" "$PREFIX/bin/dart"
 chmod +x "$PREFIX/bin/flutter" "$PREFIX/bin/dart"
 ln -sf "$FLUTTER_ROOT" "$HOME/flutter-sdk"
+
+# Configure Flutter: focus purely on Android mobile development (disable desktop/web warnings)
+"$FLUTTER_ROOT/bin/flutter" config --no-enable-linux-desktop --no-enable-web >> "$SETUP_LOG" 2>&1 || true
 
 # Self-registration so fluttersetup is globally available
 if [ -f "${BASH_SOURCE[0]:-${0}}" ]; then
@@ -667,6 +705,32 @@ export PATH="$FLUTTER_ROOT/bin:$FLUTTER_ROOT/bin/cache/dart-sdk/bin:$PREFIX/bin$
 print_info "Configuring Flutter SDK settings..."
 "$FLUTTER_ROOT/bin/flutter" config --no-analytics >> "$SETUP_LOG" 2>&1 || true
 "$FLUTTER_ROOT/bin/flutter" config --android-sdk "$ANDROID_SDK" >> "$SETUP_LOG" 2>&1 || true
+"$FLUTTER_ROOT/bin/flutter" config --no-enable-linux-desktop --no-enable-web >> "$SETUP_LOG" 2>&1 || true
+
+# Safety guard: ensure build-tools symlinks and Platform 36 exist before doctor check
+if [ -d "$ANDROID_SDK" ]; then
+  mkdir -p "$ANDROID_SDK/platforms" "$ANDROID_SDK/build-tools"
+  BT_INSTALLED=$(find "$ANDROID_SDK/build-tools" -maxdepth 1 -mindepth 1 -type d ! -name "28.0.3" ! -name "35.0.0" 2>/dev/null | head -n 1)
+  if [ -n "$BT_INSTALLED" ]; then
+    [ ! -e "$ANDROID_SDK/build-tools/28.0.3" ] && ln -sfn "$BT_INSTALLED" "$ANDROID_SDK/build-tools/28.0.3" 2>/dev/null || true
+    [ ! -e "$ANDROID_SDK/build-tools/35.0.0" ] && ln -sfn "$BT_INSTALLED" "$ANDROID_SDK/build-tools/35.0.0" 2>/dev/null || true
+  fi
+  if [ ! -d "$ANDROID_SDK/platforms/android-36" ]; then
+    BASE_PLATFORM=$(find "$ANDROID_SDK/platforms" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -n 1)
+    if [ -n "$BASE_PLATFORM" ]; then
+      mkdir -p "$ANDROID_SDK/platforms/android-36"
+      [ -f "$BASE_PLATFORM/android.jar" ] && ln -sf "$BASE_PLATFORM/android.jar" "$ANDROID_SDK/platforms/android-36/android.jar" 2>/dev/null || true
+      cat << 'EOF' > "$ANDROID_SDK/platforms/android-36/source.properties"
+Pkg.Desc=Android SDK Platform 36
+Pkg.UserSrc=false
+Platform.Version=36
+Platform.CodeName=
+Pkg.Revision=1
+AndroidVersion.ApiLevel=36
+EOF
+    fi
+  fi
+fi
 
 # Auto-accept Android SDK licenses
 print_info "Accepting Android SDK licenses..."

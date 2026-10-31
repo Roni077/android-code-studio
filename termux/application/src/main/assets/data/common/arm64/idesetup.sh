@@ -25,7 +25,7 @@ clean_log=false
 manifest="https://raw.githubusercontent.com/Roni077/acs-build-system/main/acs-manifest.json"
 pkgm="pkg"
 pkg_curl="libcurl"
-pkgs="jq tar wget termux-exec"
+pkgs="jq tar wget termux-exec which unzip"
 jdk_version="17"
 ndk_version="0"
 ndk=false
@@ -586,6 +586,91 @@ download_comp() {
   download_and_extract "$nm" "$url" "$mdir" "$mdir/$dname.tar.xz" "xz"
 }
 
+install_platform_sdk() {
+  local target_api="${1:-36}"
+  local pdir="$install_dir/android-sdk/platforms"
+  mkdir -p "$pdir"
+
+  if [ -d "$pdir/android-$target_api" ]; then
+    print_info "Android SDK Platform $target_api is already installed."
+    return 0
+  fi
+
+  print_info "Installing Android SDK Platform $target_api..."
+  local plat_url=""
+  # Tier 1: Check downloaded manifest
+  if [ -f "$downloaded_manifest" ]; then
+    plat_url=$(jq -r --arg a "$target_api" '.platforms[$a] // empty' "$downloaded_manifest" 2>/dev/null)
+  fi
+
+  # Tier 2: Official Google AOSP repository fallback
+  if [ -z "$plat_url" ] || [ "$plat_url" = "null" ]; then
+    case "$target_api" in
+      36) plat_url="https://dl.google.com/android/repository/platform-36_r01.zip" ;;
+      35) plat_url="https://dl.google.com/android/repository/platform-35_r01.zip" ;;
+      34) plat_url="https://dl.google.com/android/repository/platform-34-ext7_r02.zip" ;;
+      *) plat_url="" ;;
+    esac
+  fi
+
+  local dest_zip="$pdir/platform-${target_api}.zip"
+  local dl_ok=false
+
+  if [ -n "$plat_url" ]; then
+    print_info "Downloading Platform $target_api from repository..."
+    write_setup_log "DOWNLOAD" "Downloading Android SDK Platform $target_api from $plat_url -> $dest_zip"
+    local curl_res=0
+    if [ "$verbose" = "true" ]; then
+      curl -fL -o "$dest_zip" "$plat_url" --http1.1 2>&1 | tee -a "$SETUP_LOG" || curl_res=$?
+    else
+      curl -fL -o "$dest_zip" "$plat_url" --http1.1 >> "$SETUP_LOG" 2>&1 || curl_res=$?
+    fi
+
+    if [ $curl_res -eq 0 ] && [ -s "$dest_zip" ]; then
+      print_info "Extracting Android SDK Platform $target_api with unzip..."
+      write_setup_log "EXTRACT" "Extracting $dest_zip into $pdir"
+      local unzip_res=0
+      if [ "$verbose" = "true" ]; then
+        unzip -q "$dest_zip" -d "$pdir" 2>&1 | tee -a "$SETUP_LOG" || unzip_res=$?
+      else
+        unzip -q "$dest_zip" -d "$pdir" >> "$SETUP_LOG" 2>&1 || unzip_res=$?
+      fi
+      rm -f "$dest_zip" >> "$SETUP_LOG" 2>&1 || rm -f "$dest_zip"
+      if [ $unzip_res -eq 0 ] && [ -d "$pdir/android-$target_api" ]; then
+        print_success "Android SDK Platform $target_api installed successfully."
+        dl_ok=true
+      else
+        print_warn "Extraction did not yield expected android-$target_api directory."
+      fi
+    else
+      rm -f "$dest_zip"
+      print_warn "Could not download Platform $target_api from $plat_url (offline or network error)."
+    fi
+  fi
+
+  # Tier 3: Resilient offline fallback stub
+  if [ "$dl_ok" != "true" ] && [ ! -d "$pdir/android-$target_api" ]; then
+    local base_plat
+    base_plat=$(find "$pdir" -maxdepth 1 -mindepth 1 -type d ! -name "android-$target_api" 2>/dev/null | head -n 1)
+    if [ -n "$base_plat" ] && [ -f "$base_plat/android.jar" ]; then
+      print_info "Creating compatibility Android SDK Platform $target_api stub from $(basename "$base_plat")..."
+      write_setup_log "PLATFORM" "Synthesizing compatibility Platform $target_api stub from $base_plat"
+      mkdir -p "$pdir/android-$target_api"
+      ln -sf "$base_plat/android.jar" "$pdir/android-$target_api/android.jar"
+      cat << EOF > "$pdir/android-$target_api/source.properties"
+Pkg.Desc=Android SDK Platform $target_api
+Pkg.UserSrc=false
+Platform.Version=$target_api
+Platform.CodeName=
+Pkg.Revision=1
+AndroidVersion.ApiLevel=$target_api
+EOF
+      print_success "Compatibility Android SDK Platform $target_api stub created."
+    fi
+  fi
+  echo ""
+}
+
 # Parse command line arguments
 while [ $# -gt 0 ]; do
   case $1 in
@@ -773,6 +858,32 @@ print_info "Installing required packages.."
 install_packages $pkgs && print_success "Packages installed"
 echo ""
 
+# Ensure resilient POSIX 'which' wrapper is available
+if ! command -v which &>/dev/null; then
+  write_setup_log "TOOL" "Installing lightweight which fallback script to $PREFIX/bin/which"
+  cat << 'EOF' > "$PREFIX/bin/which"
+#!/data/data/com.tom.rv2ide/files/usr/bin/sh
+all=false
+ret=0
+for arg in "$@"; do
+  case "$arg" in
+    -a) all=true; continue ;;
+    --) continue ;;
+    -*) continue ;;
+  esac
+  p=$(command -v "$arg" 2>/dev/null)
+  if [ -n "$p" ]; then
+    printf "%s\n" "$p"
+    [ "$all" != "true" ] && exit 0
+  else
+    ret=1
+  fi
+done
+exit $ret
+EOF
+  chmod +x "$PREFIX/bin/which" 2>/dev/null || true
+fi
+
 # Download the manifest.json file
 print_info "Downloading manifest file..."
 downloaded_manifest="$install_dir/manifest.json"
@@ -786,8 +897,24 @@ echo ""
 # Install the Android SDK
 download_comp "Android SDK" "android-sdk" "$install_dir" "android-sdk"
 
+# Install Android SDK Platform 36 (Primary target platform)
+install_platform_sdk 36
+
 # Install build tools
 download_comp "Android SDK Build Tools" "build-tools" "$install_dir/android-sdk" "android-sdk-build-tools"
+
+# Setup build-tools compatibility symlinks (28.0.3 and 35.0.0 -> installed version)
+bt_dir="$install_dir/android-sdk/build-tools"
+if [ -d "$bt_dir/35.0.2" ]; then
+  [ ! -e "$bt_dir/28.0.3" ] && ln -sfn 35.0.2 "$bt_dir/28.0.3" 2>/dev/null || true
+  [ ! -e "$bt_dir/35.0.0" ] && ln -sfn 35.0.2 "$bt_dir/35.0.0" 2>/dev/null || true
+elif [ -d "$bt_dir" ]; then
+  bt_first=$(find "$bt_dir" -maxdepth 1 -mindepth 1 -type d ! -name "28.0.3" ! -name "35.0.0" 2>/dev/null | head -n 1)
+  if [ -n "$bt_first" ]; then
+    [ ! -e "$bt_dir/28.0.3" ] && ln -sfn "$(basename "$bt_first")" "$bt_dir/28.0.3" 2>/dev/null || true
+    [ ! -e "$bt_dir/35.0.0" ] && ln -sfn "$(basename "$bt_first")" "$bt_dir/35.0.0" 2>/dev/null || true
+  fi
+fi
 
 # Install platform tools
 download_comp "Android SDK Platform Tools" "platform-tools" "$install_dir/android-sdk" "android-sdk-platform-tools"

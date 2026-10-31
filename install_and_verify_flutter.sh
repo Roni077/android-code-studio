@@ -265,12 +265,9 @@ if [ -f "$POST_INSTALL_SCRIPT" ]; then
   # Adapt post_install.sh shebang and prefix for Android Code Studio
   chmod 755 "$POST_INSTALL_SCRIPT"
 
-  # Patch post_install.sh to ensure line 1 shebang replacement catches any previous shebang
-  # (e.g. #!/usr/bin/env bash or #!/data/data/com.termux/files/usr/bin/bash)
-  sed -i -E \
-    -e "s|PREFIX=\"\$\{PREFIX:-/data/data/com\.termux/files/usr\}\"|PREFIX=\"\${PREFIX:-$PREFIX}\"|g" \
-    -e "s|1s\|#!/usr/bin/env bash\|#!.*\||1s\|^#!.*\|#!${PREFIX}/bin/bash\||g" \
-    "$POST_INSTALL_SCRIPT" 2>/dev/null || true
+  # Ensure line 1 shebang uses current environment bash and map Termux prefix
+  sed -i "1s|^#!.*|#!$PREFIX/bin/bash|" "$POST_INSTALL_SCRIPT" 2>/dev/null || true
+  sed -i "s|/data/data/com\.termux/files/usr|$PREFIX|g" "$POST_INSTALL_SCRIPT" 2>/dev/null || true
 
   log_info "Running upstream post_install.sh (executing 17-step configuration engine)..."
   bash "$POST_INSTALL_SCRIPT"
