@@ -35,6 +35,8 @@ with_ndk=true
 with_cmake=true
 reinstall=false
 run_doctor=true
+clean_cache=false
+keep_cache=false
 flutter_version="3.47.8"
 requested_ndk_version=""
 requested_cmake_version=""
@@ -56,6 +58,8 @@ print_help() {
   echo "  -wn, --with-ndk          Explicitly enable NDK & CMake provisioning (default)"
   echo "  -wc, --with-cmake        Explicitly enable CMake provisioning (default)"
   echo "       --reinstall         Clean existing Flutter directory before installing"
+  echo "       --clean-cache       Clean downloaded archives (.deb, .tar.xz, .zip) after successful setup"
+  echo "       --keep-cache        Preserve downloaded archives after extraction"
   echo "       --no-doctor         Skip post-install flutter doctor verification"
   echo "  -v,  --version <ver>     Specify Flutter version (default: 3.47.8)"
   echo "  -h,  --help              Show this help message"
@@ -82,6 +86,8 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --reinstall) reinstall=true; shift ;;
+    --clean-cache) clean_cache=true; shift ;;
+    --keep-cache) keep_cache=true; shift ;;
     --no-doctor) run_doctor=false; shift ;;
     -v | --version)
       shift
@@ -200,7 +206,8 @@ else
     if command -v sha256sum &>/dev/null; then
       actual_sha=$(sha256sum "$CACHED_DEB" | awk '{print $1}')
       if [ -n "$deb_sha256" ] && [ "$actual_sha" != "$deb_sha256" ]; then
-        print_warn "Downloaded checksum (${actual_sha:0:16}...) differs from expected pin. Proceeding with caution."
+        rm -f "$CACHED_DEB"
+        abort_script "Downloaded package checksum ($actual_sha) differs from expected pin ($deb_sha256). Corrupt download discarded."
       else
         print_success "Download verified (SHA256: ${actual_sha:0:16}...)."
       fi
@@ -211,12 +218,20 @@ else
   print_info "[3/7] Extracting Flutter SDK (bypassing desktop APT dependencies)..."
   WORK_DIR=$(mktemp -d 2>/dev/null || echo "$PREFIX/tmp/flutter_extract_$$")
   mkdir -p "$WORK_DIR/extracted"
+  trap 'rm -rf "$WORK_DIR"' EXIT ERR INT TERM
 
   if command -v dpkg-deb &>/dev/null; then
-    dpkg-deb -x "$CACHED_DEB" "$WORK_DIR/extracted"
+    dpkg-deb -x "$CACHED_DEB" "$WORK_DIR/extracted" || {
+      rm -rf "$WORK_DIR"
+      abort_script "dpkg-deb failed to extract $CACHED_DEB."
+    }
   elif command -v ar &>/dev/null; then
-    (cd "$WORK_DIR" && ar -x "$CACHED_DEB" && tar -xf data.tar.* -C "$WORK_DIR/extracted")
+    (cd "$WORK_DIR" && ar -x "$CACHED_DEB" && tar -xf data.tar.* -C "$WORK_DIR/extracted") || {
+      rm -rf "$WORK_DIR"
+      abort_script "ar/tar failed to extract $CACHED_DEB."
+    }
   else
+    rm -rf "$WORK_DIR"
     abort_script "Neither dpkg-deb nor ar available to extract package."
   fi
 
@@ -237,7 +252,10 @@ else
     EXTRACTED_FLUTTER=$(find "$WORK_DIR/extracted" -type d -name "flutter" | grep "bin" | head -n 1 | sed 's|/bin||')
   fi
 
-  [ -n "$EXTRACTED_FLUTTER" ] && [ -d "$EXTRACTED_FLUTTER" ] || abort_script "Could not locate extracted flutter directory."
+  [ -n "$EXTRACTED_FLUTTER" ] && [ -d "$EXTRACTED_FLUTTER" ] || {
+    rm -rf "$WORK_DIR"
+    abort_script "Could not locate extracted flutter directory."
+  }
   mv "$EXTRACTED_FLUTTER" "$FLUTTER_ROOT"
 
   # Copy share files if present
@@ -246,6 +264,12 @@ else
   fi
 
   rm -rf "$WORK_DIR"
+  trap - EXIT ERR INT TERM
+
+  if [ "$clean_cache" = "true" ]; then
+    print_info "Removing cached package $CACHED_DEB..."
+    rm -f "$CACHED_DEB"
+  fi
 fi
 
 # 8. Path & Shebang Relocation and Upstream Post-Install Engine
@@ -378,15 +402,23 @@ provision_companion_tools() {
       if curl -fL --progress-bar -o "$cmake_archive" "$cmake_url"; then
         if [ -n "$cmake_sha" ] && command -v sha256sum &>/dev/null; then
           local actual_sha=$(sha256sum "$cmake_archive" | awk '{print $1}')
-          if [ "$actual_sha" = "$cmake_sha" ]; then
-            print_success "CMake archive verified (SHA256: ${actual_sha:0:16}...)."
+          if [ "$actual_sha" != "$cmake_sha" ]; then
+            rm -f "$cmake_archive"
+            abort_script "CMake archive checksum mismatch ($actual_sha != $cmake_sha). Corrupt download discarded."
           fi
+          print_success "CMake archive verified (SHA256: ${actual_sha:0:16}...)."
         fi
         mkdir -p "$cmake_dest"
         print_info "Extracting CMake to $cmake_dest..."
-        tar -xf "$cmake_archive" -C "$cmake_dest" --strip-components=1 2>/dev/null || tar -xf "$cmake_archive" -C "$cmake_dest"
-        chmod +x "$cmake_dest/bin/"* 2>/dev/null || true
-        print_success "CMake $cmake_ver provisioned."
+        if tar -xf "$cmake_archive" -C "$cmake_dest" --strip-components=1 2>/dev/null || tar -xf "$cmake_archive" -C "$cmake_dest"; then
+          [ "$keep_cache" != "true" ] && rm -f "$cmake_archive"
+          chmod +x "$cmake_dest/bin/"* 2>/dev/null || true
+          print_success "CMake $cmake_ver provisioned."
+        else
+          rm -rf "$cmake_dest"
+          [ "$keep_cache" != "true" ] && rm -f "$cmake_archive"
+          abort_script "Failed to extract CMake archive."
+        fi
       else
         print_warn "Failed to download CMake from $cmake_url. Attempting package manager..."
         pkg install -y cmake ninja 2>/dev/null || true
@@ -434,14 +466,22 @@ provision_companion_tools() {
       if curl -fL --progress-bar -o "$ndk_archive" "$ndk_url"; then
         if [ -n "$ndk_sha" ] && command -v sha256sum &>/dev/null; then
           local actual_sha=$(sha256sum "$ndk_archive" | awk '{print $1}')
-          if [ "$actual_sha" = "$ndk_sha" ]; then
-            print_success "NDK archive verified (SHA256: ${actual_sha:0:16}...)."
+          if [ "$actual_sha" != "$ndk_sha" ]; then
+            rm -f "$ndk_archive"
+            abort_script "NDK archive checksum mismatch ($actual_sha != $ndk_sha). Corrupt download discarded."
           fi
+          print_success "NDK archive verified (SHA256: ${actual_sha:0:16}...)."
         fi
         mkdir -p "$ndk_dest"
         print_info "Extracting NDK to $ndk_dest..."
-        tar -xJf "$ndk_archive" -C "$ndk_dest" --strip-components=1 2>/dev/null || tar -xJf "$ndk_archive" -C "$ndk_dest"
-        print_success "NDK $ndk_ver extracted."
+        if tar -xJf "$ndk_archive" -C "$ndk_dest" --strip-components=1 2>/dev/null || tar -xJf "$ndk_archive" -C "$ndk_dest"; then
+          [ "$keep_cache" != "true" ] && rm -f "$ndk_archive"
+          print_success "NDK $ndk_ver extracted."
+        else
+          rm -rf "$ndk_dest"
+          [ "$keep_cache" != "true" ] && rm -f "$ndk_archive"
+          abort_script "Failed to extract NDK archive."
+        fi
       else
         print_warn "Direct NDK download failed from $ndk_url. Checking post_install.sh fallback..."
         if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
@@ -557,6 +597,12 @@ if [ "$run_doctor" = "true" ]; then
     print_info "Check 5: flutter_termux_doctor diagnostic report"
     bash "$PREFIX/share/flutter/flutter_termux_doctor.sh" || true
   fi
+fi
+
+if [ "$clean_cache" = "true" ]; then
+  print_info "Cleaning download cache ($CACHE_DIR)..."
+  rm -f "$CACHE_DIR"/*.deb "$CACHE_DIR"/*.tar.xz "$CACHE_DIR"/*.zip "$CACHE_DIR"/acs-manifest.json 2>/dev/null || true
+  print_success "Download cache cleaned."
 fi
 
 echo ""

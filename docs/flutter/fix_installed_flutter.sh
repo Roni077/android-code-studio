@@ -77,31 +77,30 @@ else
   print_info "Step 1/5: termux-fix-shebang not present, relying on internal patcher..."
 fi
 
-# 4. Step 2: Deep regex shebang rewriting and Termux prefix relocation
-print_info "Step 2/5: Rewriting shebangs, removing CRLF, and relocating prefixes..."
+# 4. Step 2: Safe regex shebang rewriting and Termux prefix relocation
+print_info "Step 2/5: Rewriting shebangs and relocating prefixes (strictly protecting ELF binaries)..."
 patched_count=0
 old_pfx="/data/data/com.termux/files/usr"
 
-# Patch all files in bin/ and bin/internal/
-find "$FLUTTER_ROOT/bin" -type f 2>/dev/null | while read -r f; do
+# Explicit list of known shell scripts in bin and bin/internal (Zero risk to ELF binaries)
+for f in \
+  "$FLUTTER_ROOT/bin/flutter" \
+  "$FLUTTER_ROOT/bin/dart" \
+  "$FLUTTER_ROOT/bin/internal/shared.sh" \
+  "$FLUTTER_ROOT/bin/internal/update_dart_sdk.sh" \
+  "$FLUTTER_ROOT/bin/internal/content_aware_hash.sh" \
+  "$FLUTTER_ROOT/bin/internal/last_engine_commit.sh" \
+  "$FLUTTER_ROOT/bin/internal/update_engine_version.sh"; do
   if [ -f "$f" ] && [ -w "$f" ]; then
-    fsize=$(wc -c < "$f" 2>/dev/null || echo 0)
-    # Skip large binaries (e.g. dart, snapshots)
-    if [ "$fsize" -lt 5000000 ]; then
-      # Strip CRLF carriage returns
-      sed -i 's/\r$//' "$f" 2>/dev/null || true
-
-      # Relocate old Termux prefix to current RV2IDE prefix
-      sed -i "s|$old_pfx|$PREFIX|g" "$f" 2>/dev/null || true
-
-      # Rewrite Linux FHS shebangs to Android Code Studio prefix
-      sed -i -E \
-        -e "s|^#!\s*(/usr)?/bin/(env\s+)?bash|#!$TARGET_BASH|g" \
-        -e "s|^#!\s*(/usr)?/bin/(env\s+)?sh|#!$TARGET_SH|g" \
-        "$f" 2>/dev/null || true
-
-      patched_count=$((patched_count + 1))
+    # Protect against ELF binary
+    if head -c 4 "$f" 2>/dev/null | grep -q "ELF"; then
+      continue
     fi
+    sed -i 's/\r$//' "$f" 2>/dev/null || true
+    sed -i "s|$old_pfx|$PREFIX|g" "$f" 2>/dev/null || true
+    sed -i -E "1s|^#!.*|#!$TARGET_BASH|" "$f" 2>/dev/null || true
+    chmod +x "$f" 2>/dev/null || true
+    patched_count=$((patched_count + 1))
   fi
 done
 
@@ -109,18 +108,18 @@ done
 if [ -d "$FLUTTER_ROOT/packages" ]; then
   find "$FLUTTER_ROOT/packages" -type f -name "*.sh" 2>/dev/null | while read -r f; do
     if [ -f "$f" ] && [ -w "$f" ]; then
+      if head -c 4 "$f" 2>/dev/null | grep -q "ELF"; then
+        continue
+      fi
       sed -i 's/\r$//' "$f" 2>/dev/null || true
       sed -i "s|$old_pfx|$PREFIX|g" "$f" 2>/dev/null || true
-      sed -i -E \
-        -e "s|^#!\s*(/usr)?/bin/(env\s+)?bash|#!$TARGET_BASH|g" \
-        -e "s|^#!\s*(/usr)?/bin/(env\s+)?sh|#!$TARGET_SH|g" \
-        "$f" 2>/dev/null || true
+      sed -i -E "1s|^#!.*|#!$TARGET_BASH|" "$f" 2>/dev/null || true
       chmod +x "$f" 2>/dev/null || true
     fi
   done
 fi
 
-print_success "Finished sanitizing Flutter scripts."
+print_success "Finished sanitizing Flutter scripts ($patched_count key wrapper scripts updated)."
 
 # 5. Step 3: Set execute permissions on binaries and scripts
 print_info "Step 3/5: Setting execute permissions..."
@@ -147,28 +146,37 @@ if [ -f "$CURRENT_SCRIPT" ]; then
   print_success "Registered global command: 'fix-flutter' in $PREFIX/bin/"
 fi
 
-# 7. Step 5: Test update_engine_version.sh directly
-print_info "Step 5/5: Testing update_engine_version.sh execution..."
-ENGINE_SCRIPT="$FLUTTER_ROOT/bin/internal/update_engine_version.sh"
-if [ -f "$ENGINE_SCRIPT" ]; then
-  # Direct invocation to verify kernel can load interpreter without 'bad interpreter' error
-  if "$ENGINE_SCRIPT" 2>/dev/null || true; then
-    print_success "update_engine_version.sh executed without interpreter error!"
-  else
-    print_warn "update_engine_version.sh ran with non-zero exit code, but interpreter loaded."
-  fi
-else
-  print_warn "update_engine_version.sh not found at: $ENGINE_SCRIPT"
+# 7. Step 5: Execute Upstream post_install.sh & Run 4-Step Verification
+POST_INSTALL="$PREFIX/share/flutter/post_install.sh"
+if [ -f "$POST_INSTALL" ]; then
+  print_info "Step 5/6: Executing upstream post_install.sh engine..."
+  sed -i -E "s|PREFIX=\"\$\{PREFIX:-/data/data/com\.termux/files/usr\}\"|PREFIX=\"\${PREFIX:-$PREFIX}\"|g" "$POST_INSTALL" 2>/dev/null || true
+  bash "$POST_INSTALL" || print_warn "post_install.sh finished with notices."
 fi
+
+# 8. Step 6: Upstream 4-Step Verification
+print_info "Step 6/6: Verifying Flutter installation (Upstream Standard)..."
+echo -n "Check 1: flutter --version ... "
+"$FLUTTER_ROOT/bin/flutter" --version 2>&1 | head -1 || true
+echo -n "Check 2: dart --version ... "
+"$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" --version 2>&1 || true
+echo -n "Check 3: dartvm --version ... "
+if [ -x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dartvm" ]; then
+  "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dartvm" --version 2>&1 || true
+else
+  echo "OK (using dart binary)"
+fi
+echo "Check 4: flutter doctor -v"
+"$FLUTTER_ROOT/bin/flutter" doctor -v || true
 
 echo ""
 print_success "===================================================="
 print_success " Flutter SDK patch completed successfully!"
 print_success ""
-print_success " You can now run:"
-print_success "   flutter doctor"
-print_success "   flutter build apk --release --target-platform android-arm64 --verbose"
+print_success " When building an APK, remember to use --no-tree-shake-icons:"
+print_success "   flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons"
 print_success ""
 print_success " For future repairs, you can simply run: fix-flutter"
+print_success " Or run the comprehensive suite: bash install_and_verify_flutter.sh"
 print_success "===================================================="
 echo ""

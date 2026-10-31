@@ -960,10 +960,15 @@ if [ ! -d "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" ] || [ -z "$(ls -A 
 		FONTS_REL_PATH="$(cat "$FLUTTER_ROOT/bin/internal/material_fonts.version" | tr -d '\n\r')"
 	fi
 	if [ -n "$FONTS_REL_PATH" ]; then
-		cd "${TMPDIR:-$PREFIX/tmp}"
 		(
+			cd "${TMPDIR:-$PREFIX/tmp}" || exit 1
 			set +e
-			curl -s -L "https://storage.googleapis.com/$FONTS_REL_PATH" -o fonts.zip 2>/dev/null && unzip -q -o fonts.zip -d "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" 2>/dev/null && rm -f fonts.zip
+			if curl -sfL "https://storage.googleapis.com/$FONTS_REL_PATH" -o fonts.zip 2>/dev/null; then
+				if [ -s fonts.zip ]; then
+					unzip -q -o fonts.zip -d "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts" 2>/dev/null || true
+				fi
+				rm -f fonts.zip
+			fi
 		) || true
 	fi
 fi
@@ -1194,25 +1199,24 @@ SNAPSHOTS_DIR=$DART_SDK/bin/snapshots
 # Check if key snapshot is missing
 if [ ! -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
 	echo "  Downloading dart-sdk-linux-arm64.zip..."
-	cd "${TMPDIR:-$PREFIX/tmp}"
 	(
+		cd "${TMPDIR:-$PREFIX/tmp}" || exit 1
 		set +e
-		curl -L -o dart-sdk.zip "$SNAPSHOTS_URL" >/dev/null 2>&1
-	) || true
-	if [ -f dart-sdk.zip ]; then
-		echo "  Extracting snapshots..."
-		# Claim success only when the archive actually unpacked the key snapshot;
-		# on a download or unzip failure the snapshots bundled in the deb are used.
-		if unzip -o -j dart-sdk.zip 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null \
-			&& [ -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
-			echo "  ✓ Dart SDK snapshots installed"
+		if curl -fL -o dart-sdk.zip "$SNAPSHOTS_URL" >/dev/null 2>&1 && [ -s dart-sdk.zip ]; then
+			echo "  Extracting snapshots..."
+			# Claim success only when the archive actually unpacked the key snapshot;
+			# on a download or unzip failure the snapshots bundled in the deb are used.
+			if unzip -o -j dart-sdk.zip 'dart-sdk/bin/snapshots/*' -d "$SNAPSHOTS_DIR" 2>/dev/null \
+				&& [ -f "$SNAPSHOTS_DIR/dds_aot.dart.snapshot" ]; then
+				echo "  ✓ Dart SDK snapshots installed"
+			else
+				echo "  ⚠ Dart SDK snapshots unavailable (using the snapshots bundled in the deb)"
+			fi
 		else
-			echo "  ⚠ Dart SDK snapshots unavailable (using the snapshots bundled in the deb)"
+			echo "  ⚠ Network unavailable or download failed, skipping Dart SDK snapshots download"
 		fi
 		rm -f dart-sdk.zip
-	else
-		echo "  ⚠ Network unavailable, skipping Dart SDK snapshots download"
-	fi
+	) || true
 
 	# Create symlinks for non-AOT versions
 	ln -sf frontend_server_aot.dart.snapshot "$SNAPSHOTS_DIR/frontend_server.dart.snapshot" 2>/dev/null || true
@@ -1254,21 +1258,23 @@ platform_zip_url() {
 
 echo "[4/17] Installing Android SDK Platform $COMPILE_SDK..."
 if [ ! -d "$ANDROID_SDK/platforms/android-$COMPILE_SDK" ]; then
-	mkdir -p $ANDROID_SDK/platforms
-	cd $ANDROID_SDK/platforms
+	mkdir -p "$ANDROID_SDK/platforms"
 	PLATFORM_URL="$(platform_zip_url "$COMPILE_SDK" || true)"
 	if [ -n "$PLATFORM_URL" ]; then
 		(
+			cd "$ANDROID_SDK/platforms" || exit 1
 			set +e
-			curl -L -o platform-$COMPILE_SDK.zip "$PLATFORM_URL" >/dev/null 2>&1
+			if curl -fL -o "platform-$COMPILE_SDK.zip" "$PLATFORM_URL" >/dev/null 2>&1 && [ -s "platform-$COMPILE_SDK.zip" ]; then
+				if unzip -q -t "platform-$COMPILE_SDK.zip" >/dev/null 2>&1 && unzip -q "platform-$COMPILE_SDK.zip" 2>/dev/null; then
+					echo "  ✓ Platform $COMPILE_SDK installed"
+				else
+					echo "  ⚠ Failed to extract platform-$COMPILE_SDK.zip"
+				fi
+			else
+				echo "  ⚠ Download skipped/unavailable for Platform $COMPILE_SDK"
+			fi
+			rm -f "platform-$COMPILE_SDK.zip"
 		) || true
-		if [ -f platform-$COMPILE_SDK.zip ] && [ -s platform-$COMPILE_SDK.zip ]; then
-			unzip -q platform-$COMPILE_SDK.zip 2>/dev/null || true
-			rm -f platform-$COMPILE_SDK.zip
-			echo "  ✓ Platform $COMPILE_SDK installed"
-		else
-			echo "  ⚠ Download skipped/unavailable for Platform $COMPILE_SDK"
-		fi
 	fi
 	# Ensure no fake symlinks remain
 	if [ -L "$ANDROID_SDK/platforms/android-$COMPILE_SDK" ]; then
@@ -1562,13 +1568,23 @@ echo "  ✓ Build-tools symlinks created"
 # 10. Install cmdline-tools (so flutter can detect Android devices)
 echo "[10/17] Installing cmdline-tools..."
 if [ ! -d "$ANDROID_SDK/cmdline-tools/latest" ]; then
-	mkdir -p $ANDROID_SDK/cmdline-tools
-	cd $ANDROID_SDK/cmdline-tools
-	curl -L -o tools.zip 'https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip'
-	unzip -q tools.zip
-	mv cmdline-tools latest
-	rm tools.zip
-	echo "  ✓ cmdline-tools installed"
+	mkdir -p "$ANDROID_SDK/cmdline-tools"
+	(
+		cd "$ANDROID_SDK/cmdline-tools" || exit 1
+		set +e
+		if curl -fL -o tools.zip 'https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip' 2>/dev/null && [ -s tools.zip ]; then
+			if unzip -q -t tools.zip >/dev/null 2>&1 && unzip -q tools.zip 2>/dev/null; then
+				rm -rf latest
+				mv cmdline-tools latest
+				echo "  ✓ cmdline-tools installed"
+			else
+				echo "  ⚠ Failed to extract tools.zip"
+			fi
+		else
+			echo "  ⚠ Failed to download commandline-tools"
+		fi
+		rm -f tools.zip
+	) || true
 else
 	echo "  ✓ cmdline-tools already exists"
 fi

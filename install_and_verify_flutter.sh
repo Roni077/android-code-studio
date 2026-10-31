@@ -74,7 +74,27 @@ DEB_NAME="flutter_3.47.9-1_aarch64.deb"
 DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.9/${DEB_NAME}"
 CACHED_DEB="$CACHE_DIR/$DEB_NAME"
 
-TARGET_PROJECT="${1:-}"
+CLEAN_CACHE=false
+KEEP_CACHE=false
+TARGET_PROJECT=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --clean-cache) CLEAN_CACHE=true ;;
+    --keep-cache) KEEP_CACHE=true ;;
+    --clean)
+      log_info "Cleaning download cache ($CACHE_DIR)..."
+      rm -f "$CACHE_DIR"/*.deb "$CACHE_DIR"/*.tar.xz "$CACHE_DIR"/*.zip "$CACHE_DIR"/acs-manifest.json 2>/dev/null || true
+      log_success "Download cache cleaned."
+      exit 0
+      ;;
+    *)
+      if [ -z "$TARGET_PROJECT" ]; then
+        TARGET_PROJECT="$arg"
+      fi
+      ;;
+  esac
+done
 
 log_section "Android Code Studio • Flutter Environment"
 echo "  PREFIX       : $PREFIX"
@@ -138,12 +158,22 @@ if [ "$dart_broken" -eq 1 ]; then
   log_info "Extracting pristine dart-sdk from $found_deb..."
   WORK_EXTRACT="$TMPDIR/deb_extract_$$"
   mkdir -p "$WORK_EXTRACT"
+  trap 'rm -rf "$WORK_EXTRACT"' EXIT ERR INT TERM
 
   if command -v dpkg-deb >/dev/null 2>&1; then
-    dpkg-deb -x "$found_deb" "$WORK_EXTRACT"
+    dpkg-deb -x "$found_deb" "$WORK_EXTRACT" || {
+      rm -rf "$WORK_EXTRACT"
+      log_err "dpkg-deb failed to extract $found_deb."
+      exit 1
+    }
   elif command -v ar >/dev/null 2>&1; then
-    (cd "$WORK_EXTRACT" && ar -x "$found_deb" && tar -xf data.tar.*)
+    (cd "$WORK_EXTRACT" && ar -x "$found_deb" && tar -xf data.tar.*) || {
+      rm -rf "$WORK_EXTRACT"
+      log_err "ar/tar failed to extract $found_deb."
+      exit 1
+    }
   else
+    rm -rf "$WORK_EXTRACT"
     log_err "Neither dpkg-deb nor ar available for extraction."
     exit 1
   fi
@@ -186,6 +216,12 @@ if [ "$dart_broken" -eq 1 ]; then
   fi
 
   rm -rf "$WORK_EXTRACT"
+  trap - EXIT ERR INT TERM
+
+  if [ "$CLEAN_CACHE" = "true" ] && [ "$found_deb" = "$CACHED_DEB" ]; then
+    log_info "Removing cached package $CACHED_DEB..."
+    rm -f "$CACHED_DEB"
+  fi
 fi
 
 # Quick test of recovered binary
@@ -290,14 +326,24 @@ else
   if curl -fL --progress-bar -o "$NDK_ARCHIVE" "$NDK_URL"; then
     if command -v sha256sum >/dev/null 2>&1; then
       actual_sha=$(sha256sum "$NDK_ARCHIVE" | awk '{print $1}')
-      if [ "$actual_sha" = "$NDK_SHA" ]; then
-        log_success "NDK archive verified (SHA256: ${actual_sha:0:16}...)"
+      if [ "$actual_sha" != "$NDK_SHA" ]; then
+        rm -f "$NDK_ARCHIVE"
+        log_err "NDK archive checksum mismatch ($actual_sha != $NDK_SHA). Corrupt download discarded."
+        exit 1
       fi
+      log_success "NDK archive verified (SHA256: ${actual_sha:0:16}...)"
     fi
     mkdir -p "$NDK_DEST"
     log_info "Extracting NDK $NDK_VER..."
-    tar -xJf "$NDK_ARCHIVE" -C "$NDK_DEST" --strip-components=1 2>/dev/null || tar -xJf "$NDK_ARCHIVE" -C "$NDK_DEST"
-    log_success "NDK $NDK_VER extracted successfully."
+    if tar -xJf "$NDK_ARCHIVE" -C "$NDK_DEST" --strip-components=1 2>/dev/null || tar -xJf "$NDK_ARCHIVE" -C "$NDK_DEST"; then
+      [ "$KEEP_CACHE" != "true" ] && rm -f "$NDK_ARCHIVE"
+      log_success "NDK $NDK_VER extracted successfully."
+    else
+      rm -rf "$NDK_DEST"
+      [ "$KEEP_CACHE" != "true" ] && rm -f "$NDK_ARCHIVE"
+      log_err "Failed to extract NDK archive."
+      exit 1
+    fi
   else
     log_warn "Failed to download NDK $NDK_VER from $NDK_URL."
   fi
@@ -328,15 +374,25 @@ else
   if curl -fL --progress-bar -o "$CMAKE_ARCHIVE" "$CMAKE_URL"; then
     if command -v sha256sum >/dev/null 2>&1; then
       actual_sha=$(sha256sum "$CMAKE_ARCHIVE" | awk '{print $1}')
-      if [ "$actual_sha" = "$CMAKE_SHA" ]; then
-        log_success "CMake archive verified (SHA256: ${actual_sha:0:16}...)"
+      if [ "$actual_sha" != "$CMAKE_SHA" ]; then
+        rm -f "$CMAKE_ARCHIVE"
+        log_err "CMake archive checksum mismatch ($actual_sha != $CMAKE_SHA). Corrupt download discarded."
+        exit 1
       fi
+      log_success "CMake archive verified (SHA256: ${actual_sha:0:16}...)"
     fi
     mkdir -p "$CMAKE_DEST"
     log_info "Extracting CMake $CMAKE_VER..."
-    tar -xf "$CMAKE_ARCHIVE" -C "$CMAKE_DEST" --strip-components=1 2>/dev/null || tar -xf "$CMAKE_ARCHIVE" -C "$CMAKE_DEST"
-    chmod +x "$CMAKE_DEST/bin/"* 2>/dev/null || true
-    log_success "CMake $CMAKE_VER extracted successfully."
+    if tar -xf "$CMAKE_ARCHIVE" -C "$CMAKE_DEST" --strip-components=1 2>/dev/null || tar -xf "$CMAKE_ARCHIVE" -C "$CMAKE_DEST"; then
+      [ "$KEEP_CACHE" != "true" ] && rm -f "$CMAKE_ARCHIVE"
+      chmod +x "$CMAKE_DEST/bin/"* 2>/dev/null || true
+      log_success "CMake $CMAKE_VER extracted successfully."
+    else
+      rm -rf "$CMAKE_DEST"
+      [ "$KEEP_CACHE" != "true" ] && rm -f "$CMAKE_ARCHIVE"
+      log_err "Failed to extract CMake archive."
+      exit 1
+    fi
   else
     log_warn "Failed to download CMake $CMAKE_VER from $CMAKE_URL."
   fi
@@ -446,6 +502,12 @@ if [ -n "$TARGET_PROJECT" ] && [ -d "$TARGET_PROJECT" ]; then
   echo -e "  ${BOLD}cd \"$TARGET_PROJECT\"${NC}"
   echo -e "  ${BOLD}flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons --verbose${NC}"
   echo ""
+fi
+
+if [ "$CLEAN_CACHE" = "true" ]; then
+  log_info "Cleaning download cache ($CACHE_DIR)..."
+  rm -f "$CACHE_DIR"/*.deb "$CACHE_DIR"/*.tar.xz "$CACHE_DIR"/*.zip "$CACHE_DIR"/acs-manifest.json 2>/dev/null || true
+  log_success "Download cache cleaned."
 fi
 
 # --- Summary ---

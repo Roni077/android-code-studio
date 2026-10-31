@@ -132,9 +132,10 @@ setup_ndk_extractor() {
         if [[ "$NDK_ENCRYPTED" == "false" ]] || [[ "$NDK_FILENAME" == *.tar.xz ]]; then
             npr "Extracting open NDK archive ($NDK_FILENAME)..."
             tar -xJf "$NDK_OUTPUTDIR" -C "$_dest" --strip-components=1 || this_abort "Failed to extract NDK tarball"
+            rm -f "$NDK_OUTPUTDIR"
             touch "$OUTPUT_BIN"
             chmod +x "$OUTPUT_BIN"
-            npr "Direct extraction succeeded"
+            npr "Direct extraction succeeded and archive cleaned"
         else
             # Rename the native kit bundle
             mv "$NDK_OUTPUTDIR" "$OUTPUT_BIN" || this_abort "Something went wrong while renaming $NDK_FILENAME"
@@ -164,7 +165,6 @@ setup_ndk() {
 
     npr "Running environmental check..."
     [ ! -f $PREFIX/bin/ndk_extractor ] && setup_ndk_extractor
-    local ndkUrl="https://github.com/Mohammed-Baqer-null/AndroidIDE-Rv2-ndk/releases/download/v27.1.12297006/android-ndk-r27b-aarch64.zip"
     local ndkVersion="${ndk_version:-28.2.13676358}"
     [ "$ndkVersion" = "0" ] && ndkVersion="28.2.13676358"
     local not_supported=("x86" "riscv64")
@@ -330,28 +330,40 @@ download_and_extract() {
 
   if [ "$do_download" = "true" ]; then
     print_info "Downloading $name..."
-    curl -L -o "$dest" "$url" --http1.1
+    curl -fL -o "$dest" "$url" --http1.1
     print_success "$name has been downloaded."
     echo ""
   fi
 
-  if [ ! -f "$dest" ]; then
-    print_err "The downloaded file $name does not exist. Cannot proceed..."
+  if [ ! -f "$dest" ] || [ ! -s "$dest" ]; then
+    rm -f "$dest"
+    print_err "The downloaded file $name does not exist or is empty. Cannot proceed..."
     exit 1
   fi
 
   # Extract the downloaded archive
   if [[ "$extract_with" == "xz" ]]; then
     print_info "Extracting downloaded archive with xz..."
-    tar xvJf "$dest" && print_info "Extracted successfully"
+    if tar xvJf "$dest"; then
+      print_info "Extracted successfully"
+      rm -vf "$dest"
+    else
+      rm -f "$dest"
+      print_err "Failed to extract archive $name."
+      exit 1
+    fi
   else
     print_info "Extracting downloaded archive with unzip..."
-    unzip "$dest" && print_info "Extracted successfully"
+    if unzip "$dest"; then
+      print_info "Extracted successfully"
+      rm -vf "$dest"
+    else
+      rm -f "$dest"
+      print_err "Failed to extract archive $name."
+      exit 1
+    fi
   fi
   echo ""
-
-  # Delete the downloaded file
-  rm -vf "$dest"
 
   # cd into the previous working directory
   cd -

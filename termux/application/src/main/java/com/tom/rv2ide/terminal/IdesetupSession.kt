@@ -139,10 +139,17 @@ private constructor(
 
   override fun finish() {
     super.finish()
-    // Delete the temporary script file once the session is finished
+    // Delete the temporary script files once the session is finished
     val error = FileUtils.deleteFile("idesetupScript", script.absolutePath, true)
     if (error != null) {
       log.error(error.errorLogString)
+    }
+    val flutterScript = File(script.parentFile, "fluttersetup.sh")
+    if (flutterScript.exists()) {
+      val flutterErr = FileUtils.deleteFile("fluttersetupScript", flutterScript.absolutePath, true)
+      if (flutterErr != null) {
+        log.error(flutterErr.errorLogString)
+      }
     }
   }
 }
