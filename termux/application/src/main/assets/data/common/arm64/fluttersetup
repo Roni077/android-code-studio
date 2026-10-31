@@ -255,22 +255,22 @@ else
     print_info "[2/7] Downloading Flutter SDK package (~610 MB)..."
     print_info "Source: $DEB_URL"
     write_setup_log "DOWNLOAD" "Downloading Flutter SDK package from $DEB_URL to $CACHED_DEB"
-    local dl_err=0
+    dl_err=0
     if [ "$verbose" = "true" ]; then
       curl -fL --progress-bar -o "$CACHED_DEB" "$DEB_URL" 2>&1 | tee -a "$SETUP_LOG" || dl_err=$?
     else
-      curl -fL -o "$CACHED_DEB" "$DEB_URL" >> "$SETUP_LOG" 2>&1 || dl_err=$?
+      curl -fL --progress-bar -o "$CACHED_DEB" "$DEB_URL" 2>&1 || dl_err=$?
     fi
     if [ $dl_err -ne 0 ]; then
       # Fallback to pkg_rel 6 if 7 not found
       ALT_DEB="flutter_${flutter_version}-6_aarch64.deb"
       ALT_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/${flutter_version}/${ALT_DEB}"
       print_warn "Primary release download failed, trying fallback: $ALT_URL..."
-      write_setup_log "WARN" "Primary download failed, trying fallback: $ALT_URL"
+      write_setup_log "WARN" "Primary download failed (exit code: $dl_err), trying fallback: $ALT_URL"
       if [ "$verbose" = "true" ]; then
         curl -fL --progress-bar -o "$CACHED_DEB" "$ALT_URL" 2>&1 | tee -a "$SETUP_LOG" || abort_script "Failed to download Flutter package."
       else
-        curl -fL -o "$CACHED_DEB" "$ALT_URL" >> "$SETUP_LOG" 2>&1 || abort_script "Failed to download Flutter package."
+        curl -fL --progress-bar -o "$CACHED_DEB" "$ALT_URL" 2>&1 || abort_script "Failed to download Flutter package."
       fi
     fi
 

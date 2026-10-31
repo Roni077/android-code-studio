@@ -13,6 +13,8 @@ Orange="\e[38;5;208m"
 yes='^[Yy][Ee]?[Ss]?$'
 
 # Default values
+PREFIX="${PREFIX:-/data/data/com.tom.rv2ide/files/usr}"
+SYSROOT="${SYSROOT:-$PREFIX}"
 arch=$(uname -m)
 install_dir=$HOME
 sdkver_org=35.0.2
@@ -520,16 +522,17 @@ download_and_extract() {
   # Extract the downloaded archive
   if [[ "$extract_with" == "xz" ]]; then
     print_info "Extracting downloaded archive with xz..."
-    write_setup_log "EXTRACT" "Extracting $dest using tar xvJf in $dir"
     local tar_res=0
     if [ "$verbose" = "true" ]; then
+      write_setup_log "EXTRACT" "Extracting $dest using tar xvJf in $dir"
       tar xvJf "$dest" 2>&1 | tee -a "$SETUP_LOG" || tar_res=$?
     else
-      tar xvJf "$dest" >> "$SETUP_LOG" 2>&1 || tar_res=$?
+      write_setup_log "EXTRACT" "Extracting $dest using tar xJf in $dir"
+      tar xJf "$dest" >> "$SETUP_LOG" 2>&1 || tar_res=$?
     fi
     if [ $tar_res -eq 0 ]; then
       print_info "Extracted successfully"
-      rm -vf "$dest" >> "$SETUP_LOG" 2>&1 || rm -f "$dest"
+      rm -f "$dest" >> "$SETUP_LOG" 2>&1 || rm -f "$dest"
     else
       rm -f "$dest"
       print_err "Failed to extract archive $name (tar exit code: $tar_res)."
@@ -537,16 +540,17 @@ download_and_extract() {
     fi
   else
     print_info "Extracting downloaded archive with unzip..."
-    write_setup_log "EXTRACT" "Extracting $dest using unzip in $dir"
     local zip_res=0
     if [ "$verbose" = "true" ]; then
+      write_setup_log "EXTRACT" "Extracting $dest using unzip in $dir"
       unzip "$dest" 2>&1 | tee -a "$SETUP_LOG" || zip_res=$?
     else
-      unzip "$dest" >> "$SETUP_LOG" 2>&1 || zip_res=$?
+      write_setup_log "EXTRACT" "Extracting $dest using unzip -q in $dir"
+      unzip -q "$dest" >> "$SETUP_LOG" 2>&1 || zip_res=$?
     fi
     if [ $zip_res -eq 0 ]; then
       print_info "Extracted successfully"
-      rm -vf "$dest" >> "$SETUP_LOG" 2>&1 || rm -f "$dest"
+      rm -f "$dest" >> "$SETUP_LOG" 2>&1 || rm -f "$dest"
     else
       rm -f "$dest"
       print_err "Failed to extract archive $name (unzip exit code: $zip_res)."
@@ -797,12 +801,23 @@ fi
 print_info "Installing package: 'openjdk-$jdk_version'"
 install_packages "openjdk-$jdk_version" && print_info "JDK $jdk_version has been installed."
 
-jdk_dir="$JAVA_HOME"
+# Dynamically detect JAVA_HOME
+if [ -z "$JAVA_HOME" ] || [ "$JAVA_HOME" = "/" ] || [ ! -d "$JAVA_HOME" ]; then
+  if [ -d "$PREFIX/lib/jvm/java-$jdk_version-openjdk" ]; then
+    JAVA_HOME="$PREFIX/lib/jvm/java-$jdk_version-openjdk"
+  else
+    JAVA_HOME=$(find "$PREFIX/lib/jvm" -maxdepth 1 -type d -name "java-${jdk_version}-*" 2>/dev/null | head -n 1)
+    [ -z "$JAVA_HOME" ] && JAVA_HOME=$(find "$PREFIX/lib/jvm" -maxdepth 1 -type d -name 'java-*-openjdk' 2>/dev/null | sort -V | tail -1)
+  fi
+fi
+jdk_dir="${JAVA_HOME:-$PREFIX/lib/jvm/java-$jdk_version-openjdk}"
+export JAVA_HOME="$jdk_dir"
 
 print_info "NDK $ndk_version"
 
 print_info "Updating ide-environment.properties..."
 print_info "JAVA_HOME=$jdk_dir"
+print_info "ANDROID_SDK_ROOT=$install_dir/android-sdk"
 echo ""
 props_dir="$SYSROOT/etc"
 props="$props_dir/ide-environment.properties"
@@ -811,13 +826,17 @@ if [ ! -d "$props_dir" ]; then
   mkdir -p "$props_dir"
 fi
 
+props_content="JAVA_HOME=$jdk_dir
+ANDROID_SDK_ROOT=$install_dir/android-sdk
+ANDROID_HOME=$install_dir/android-sdk"
+
 if [ ! -e "$props" ]; then
-  printf "JAVA_HOME=%s" "$jdk_dir" >"$props" && print_success "Properties file updated successfully!"
+  printf "%s\n" "$props_content" >"$props" && print_success "Properties file updated successfully!"
 else
   if is_yes "$props file already exists. Would you like to overwrite it?"; then
-    printf "JAVA_HOME=%s" "$jdk_dir" >"$props" && print_success "Properties file updated successfully!"
+    printf "%s\n" "$props_content" >"$props" && print_success "Properties file updated successfully!"
   else
-    print_err "Manually edit $SYSROOT/etc/ide-environment.properties file and set JAVA_HOME and ANDROID_SDK_ROOT."
+    print_err "Manually edit $props file and set JAVA_HOME and ANDROID_SDK_ROOT."
   fi
 fi
 
@@ -838,14 +857,19 @@ if [ "$with_flutter" = "true" ]; then
   elif [ "$ndk" = "true" ]; then
     flutter_args+=("-wn")
   fi
+  flutter_exit=0
   if [ -f "$dir/fluttersetup.sh" ]; then
-    bash "$dir/fluttersetup.sh" "${flutter_args[@]}"
+    bash "$dir/fluttersetup.sh" "${flutter_args[@]}" || flutter_exit=$?
   elif [ -f "$PREFIX/bin/fluttersetup.sh" ]; then
-    bash "$PREFIX/bin/fluttersetup.sh" "${flutter_args[@]}"
+    bash "$PREFIX/bin/fluttersetup.sh" "${flutter_args[@]}" || flutter_exit=$?
   elif [ -f "$PREFIX/bin/fluttersetup" ]; then
-    bash "$PREFIX/bin/fluttersetup" "${flutter_args[@]}"
+    bash "$PREFIX/bin/fluttersetup" "${flutter_args[@]}" || flutter_exit=$?
   else
     print_err "fluttersetup.sh not found in $dir or $PREFIX/bin!"
+    flutter_exit=1
+  fi
+  if [ $flutter_exit -ne 0 ]; then
+    this_abort "Flutter SDK setup failed with exit code $flutter_exit."
   fi
 fi
 
