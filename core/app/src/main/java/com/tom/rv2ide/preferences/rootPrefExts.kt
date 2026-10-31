@@ -41,7 +41,6 @@ class ConfigurationPreferences(
     addPreference(AIAgentPreferencesScreen())
     addPreference(BuildAndRunPreferences())
     addPreference(TermuxPreferences())
-    addPreference(BackupAndRestorePreferencesScreen())
   }
 }
 

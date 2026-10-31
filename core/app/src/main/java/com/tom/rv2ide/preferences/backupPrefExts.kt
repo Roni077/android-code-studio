@@ -38,7 +38,6 @@ class BackupAndRestorePreferencesScreen(
     override val key: String = "idepref_backup_restore",
     override val title: Int = R.string.backup_restore_title,
     override val summary: Int? = R.string.backup_restore_summary,
-    override val icon: Int? = R.drawable.ic_backup,
     override val children: List<IPreference> = mutableListOf(),
 ) : IPreferenceScreen() {
 
