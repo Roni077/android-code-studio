@@ -586,7 +586,11 @@ if [ "$with_flutter" = "true" ]; then
   print_info "Initiating Flutter SDK setup..."
   dir="$(cd "$(dirname "${BASH_SOURCE[0]:-${0:-.}}")" 2>/dev/null && pwd || echo ".")"
   flutter_args=("-y")
-  if [ "$ndk" = "true" ]; then
+  if [ "$ndk_version" = "0" ] && [ "$ndk" != "true" ]; then
+    flutter_args+=("--no-ndk")
+  elif [ -n "$ndk_version" ] && [ "$ndk_version" != "0" ]; then
+    flutter_args+=("--ndk-version" "$ndk_version")
+  elif [ "$ndk" = "true" ]; then
     flutter_args+=("-wn")
   fi
   if [ -f "$dir/fluttersetup.sh" ]; then

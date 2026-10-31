@@ -31,8 +31,8 @@ ANDROID_SDK="${ANDROID_SDK:-$HOME/android-sdk}"
 FLUTTER_ROOT="${FLUTTER_ROOT:-$PREFIX/opt/flutter}"
 
 assume_yes=false
-with_ndk=false
-with_cmake=false
+with_ndk=true
+with_cmake=true
 reinstall=false
 run_doctor=true
 flutter_version="3.47.8"
@@ -49,10 +49,12 @@ print_help() {
   echo ""
   echo "Options:"
   echo "  -y,  --assume-yes        Run non-interactively without confirmation prompts"
-  echo "  -wn, --with-ndk          Also provision the ARM64 Android NDK for native C/C++ plugins"
-  echo "       --ndk-version <ver> Specify specific NDK version (e.g. 29.0.14033849, 30.0.16248370)"
-  echo "  -wc, --with-cmake        Also provision on-device CMake"
-  echo "       --cmake-version <v> Specify specific CMake version (e.g. 3.31.6, 4.1.2)"
+  echo "       --no-ndk            Skip provisioning ARM64 Android NDK (enabled by default)"
+  echo "       --ndk-version <ver> Specify specific NDK version (default: latest, e.g. 29.0.14033849)"
+  echo "       --no-cmake          Skip provisioning on-device CMake (enabled by default)"
+  echo "       --cmake-version <v> Specify specific CMake version (default: latest, e.g. 4.1.2)"
+  echo "  -wn, --with-ndk          Explicitly enable NDK & CMake provisioning (default)"
+  echo "  -wc, --with-cmake        Explicitly enable CMake provisioning (default)"
   echo "       --reinstall         Clean existing Flutter directory before installing"
   echo "       --no-doctor         Skip post-install flutter doctor verification"
   echo "  -v,  --version <ver>     Specify Flutter version (default: 3.47.8)"
@@ -63,11 +65,12 @@ print_help() {
 while [ $# -gt 0 ]; do
   case "$1" in
     -y | --assume-yes) assume_yes=true; shift ;;
+    --no-ndk | --without-ndk) with_ndk=false; shift ;;
+    --no-cmake | --without-cmake) with_cmake=false; shift ;;
     -wn | --with-ndk) with_ndk=true; with_cmake=true; shift ;;
     --ndk-version)
       shift
       with_ndk=true
-      with_cmake=true
       requested_ndk_version="${1:-}"
       shift
       ;;
@@ -302,8 +305,8 @@ provision_companion_tools() {
       fi
     fi
 
-    [ -z "$cmake_ver" ] && cmake_ver="3.31.6"
-    [ -z "$cmake_url" ] && cmake_url="https://github.com/Roni077/acs-build-system/releases/download/v${cmake_ver}/cmake-${cmake_ver}-aarch64-linux-android.tar.xz"
+    [ -z "$cmake_ver" ] && cmake_ver="4.1.2"
+    [ -z "$cmake_url" ] && cmake_url="https://github.com/Roni077/acs-build-system/releases/download/v${cmake_ver}/cmake-aarch64-linux-musl.tar.xz"
 
     local cmake_dest="$ANDROID_SDK/cmake/$cmake_ver"
     if [ -x "$cmake_dest/bin/cmake" ]; then
