@@ -161,11 +161,120 @@ class FlutterBuildApkAction(context: Context, override val order: Int) : BaseFlu
       return
     }
 
-    FlutterBuildManager.startBuild(projectDir)
+    val targets = arrayOf(
+        activity.getString(R.string.title_flutter_build_release_apk),
+        activity.getString(R.string.title_flutter_build_debug_apk),
+        activity.getString(R.string.title_flutter_build_aab)
+    )
+
+    MaterialAlertDialogBuilder(activity)
+        .setTitle(R.string.title_flutter_build_target)
+        .setItems(targets) { _, which ->
+          when (which) {
+            0 -> FlutterBuildManager.startBuild(
+                projectDir,
+                listOf("build", "apk", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
+            )
+            1 -> FlutterBuildManager.startBuild(
+                projectDir,
+                listOf("build", "apk", "--debug", "--no-tree-shake-icons")
+            )
+            2 -> FlutterBuildManager.startBuild(
+                projectDir,
+                listOf("build", "appbundle", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
+            )
+          }
+        }
+        .setNegativeButton(android.R.string.cancel, null)
+        .show()
   }
 
   override fun getShowAsActionFlags(data: ActionData): Int {
     return MenuItem.SHOW_AS_ACTION_IF_ROOM
+  }
+}
+
+/**
+ * Action to run `flutter clean`.
+ */
+class FlutterCleanAction(context: Context, override val order: Int) : BaseFlutterAction() {
+
+  override val id: String = "ide.editor.flutter.clean"
+
+  init {
+    label = context.getString(R.string.title_flutter_clean)
+    icon = ContextCompat.getDrawable(context, R.drawable.ic_delete)
+  }
+
+  override fun prepare(data: ActionData) {
+    super.prepare(data)
+    val projectDir = IProjectManager.getInstance().projectDir
+    val isFlutter = FlutterProjectHelper.isFlutterProject(projectDir)
+    visible = isFlutter
+    enabled = isFlutter
+  }
+
+  override suspend fun execAction(data: ActionData) {
+    val activity = data.getActivity() ?: return
+    val projectDir = IProjectManager.getInstance().projectDir ?: return
+
+    if (!FlutterProjectHelper.isFlutterInstalled()) {
+      promptInstallFlutter(activity)
+      return
+    }
+
+    val intent = Intent(activity, TerminalActivity::class.java).apply {
+      putExtra(TerminalActivity.EXTRA_WORKING_DIR, projectDir.absolutePath)
+      putExtra(TerminalActivity.EXTRA_INITIAL_COMMAND, "flutter clean")
+      putExtra(TerminalActivity.EXTRA_SESSION_NAME, "Flutter Clean")
+    }
+    activity.startActivity(intent)
+  }
+
+  override fun getShowAsActionFlags(data: ActionData): Int {
+    return MenuItem.SHOW_AS_ACTION_NEVER
+  }
+}
+
+/**
+ * Action to run `flutter pub upgrade`.
+ */
+class FlutterPubUpgradeAction(context: Context, override val order: Int) : BaseFlutterAction() {
+
+  override val id: String = "ide.editor.flutter.pubUpgrade"
+
+  init {
+    label = context.getString(R.string.title_flutter_pub_upgrade)
+    icon = ContextCompat.getDrawable(context, R.drawable.download)
+  }
+
+  override fun prepare(data: ActionData) {
+    super.prepare(data)
+    val projectDir = IProjectManager.getInstance().projectDir
+    val isFlutter = FlutterProjectHelper.isFlutterProject(projectDir)
+    visible = isFlutter
+    enabled = isFlutter
+  }
+
+  override suspend fun execAction(data: ActionData) {
+    val activity = data.getActivity() ?: return
+    val projectDir = IProjectManager.getInstance().projectDir ?: return
+
+    if (!FlutterProjectHelper.isFlutterInstalled()) {
+      promptInstallFlutter(activity)
+      return
+    }
+
+    val intent = Intent(activity, TerminalActivity::class.java).apply {
+      putExtra(TerminalActivity.EXTRA_WORKING_DIR, projectDir.absolutePath)
+      putExtra(TerminalActivity.EXTRA_INITIAL_COMMAND, "flutter pub upgrade")
+      putExtra(TerminalActivity.EXTRA_SESSION_NAME, "Pub Upgrade")
+    }
+    activity.startActivity(intent)
+  }
+
+  override fun getShowAsActionFlags(data: ActionData): Int {
+    return MenuItem.SHOW_AS_ACTION_NEVER
   }
 }
 

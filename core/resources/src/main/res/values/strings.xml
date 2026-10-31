@@ -1011,6 +1011,12 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="title_flutter_hot_reload">Hot Reload</string>
   <string name="title_flutter_hot_restart">Hot Restart</string>
   <string name="title_flutter_build_apk">Build Flutter APK</string>
+  <string name="title_flutter_build_target">Select Build Target</string>
+  <string name="title_flutter_build_release_apk">Build Release APK (arm64-v8a)</string>
+  <string name="title_flutter_build_debug_apk">Build Debug APK</string>
+  <string name="title_flutter_build_aab">Build Release App Bundle (AAB)</string>
+  <string name="title_flutter_clean">Flutter Clean</string>
+  <string name="title_flutter_pub_upgrade">Pub Upgrade</string>
   <string name="title_flutter_analyze">Analyze Project</string>
   <string name="title_flutter_pub_get">Pub Get</string>
   <string name="title_flutter_doctor">Flutter Doctor</string>

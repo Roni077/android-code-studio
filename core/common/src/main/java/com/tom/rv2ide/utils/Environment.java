@@ -125,11 +125,18 @@ public final class Environment {
 
         // Symlink $HOME/flutter-sdk -> FLUTTER_HOME for easier access within $HOME
         File flutterSdkLink = new File(HOME, "flutter-sdk");
-        if (FLUTTER_HOME.exists() && !flutterSdkLink.exists()) {
+        if (FLUTTER_HOME.exists()) {
+            if (!flutterSdkLink.exists()) {
+                try {
+                    android.system.Os.symlink(FLUTTER_HOME.getAbsolutePath(), flutterSdkLink.getAbsolutePath());
+                } catch (Throwable t) {
+                    LOG.error("Failed to create symlink for flutter-sdk: {}", t.getMessage());
+                }
+            }
             try {
-                android.system.Os.symlink(FLUTTER_HOME.getAbsolutePath(), flutterSdkLink.getAbsolutePath());
+                FlutterSdkSanitizer.sanitize(FLUTTER_HOME, PREFIX);
             } catch (Throwable t) {
-                LOG.error("Failed to create symlink for flutter-sdk: {}", t.getMessage());
+                LOG.warn("Failed to auto-sanitize flutter-sdk: {}", t.getMessage());
             }
         }
 
@@ -189,6 +196,18 @@ public final class Environment {
         env.put("LD_LIBRARY_PATH", LIB_DIR.getAbsolutePath() + ":" + 
                 new File(JAVA_HOME, "lib").getAbsolutePath());
         env.put("TMPDIR", TMP_DIR.getAbsolutePath());
+
+        File termuxExecLib = new File(LIB_DIR, "libtermux-exec.so");
+        if (termuxExecLib.exists()) {
+            String existingPreload = env.get("LD_PRELOAD");
+            if (existingPreload != null && !existingPreload.isEmpty()) {
+                if (!existingPreload.contains(termuxExecLib.getAbsolutePath())) {
+                    env.put("LD_PRELOAD", termuxExecLib.getAbsolutePath() + ":" + existingPreload);
+                }
+            } else {
+                env.put("LD_PRELOAD", termuxExecLib.getAbsolutePath());
+            }
+        }
         
         // add user envs for non-failsafe sessions
         if (!forFailsafe) {

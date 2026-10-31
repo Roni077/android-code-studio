@@ -18,6 +18,7 @@
 package com.tom.rv2ide.flutter.project
 
 import com.tom.rv2ide.utils.Environment
+import com.tom.rv2ide.utils.FlutterSdkSanitizer
 import java.io.File
 import org.slf4j.LoggerFactory
 
@@ -45,7 +46,11 @@ object FlutterProjectHelper {
   @JvmStatic
   fun isFlutterInstalled(): Boolean {
     val bin = Environment.FLUTTER_BIN
-    return bin != null && bin.exists()
+    if (bin != null && bin.exists()) {
+      bin.setExecutable(true, false)
+      return true
+    }
+    return false
   }
 
   /**
@@ -54,6 +59,13 @@ object FlutterProjectHelper {
    */
   @JvmStatic
   fun configureProjectForAndroidCS(projectDir: File): Boolean {
+    // Ensure on-device Flutter SDK scripts have valid Android shebangs & permissions
+    try {
+      FlutterSdkSanitizer.sanitize()
+    } catch (e: Exception) {
+      log.warn("Failed to sanitize Flutter SDK scripts: {}", e.message)
+    }
+
     val androidDir = File(projectDir, "android")
     if (!androidDir.exists() || !androidDir.isDirectory) {
       log.warn("Not an Android-enabled Flutter project: {}", projectDir)
@@ -61,6 +73,7 @@ object FlutterProjectHelper {
     }
 
     try {
+      configureGradlew(androidDir)
       configureGradleProperties(androidDir)
       configureAppGradle(androidDir)
       return true
@@ -70,32 +83,68 @@ object FlutterProjectHelper {
     }
   }
 
+  private fun configureGradlew(androidDir: File) {
+    val gradlew = File(androidDir, "gradlew")
+    if (gradlew.exists()) {
+      val bashPath = File(Environment.PREFIX, "bin/bash").absolutePath
+      val content = gradlew.readText()
+      if (!content.startsWith("#!$bashPath")) {
+        val lines = content.lines()
+        val updated = "#!$bashPath\n" + (if (lines.isNotEmpty()) lines.drop(1).joinToString("\n") else "")
+        gradlew.writeText(updated)
+        gradlew.setExecutable(true, false)
+        log.info("Updated gradlew shebang to #!{}", bashPath)
+      }
+    }
+  }
+
   private fun configureGradleProperties(androidDir: File) {
     val gradleProps = File(androidDir, "gradle.properties")
     val aapt2Path = File(Environment.PREFIX, "bin/aapt2").absolutePath
     val overrideEntry = "android.aapt2FromMavenOverride=$aapt2Path"
+    val optimizationsEntry = "android.enableResourceOptimizations=false"
+    val shrinkEntry = "shrink=false"
+    val jvmArgsEntry = "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
 
     if (!gradleProps.exists()) {
-      gradleProps.writeText("$overrideEntry\n")
-      log.info("Created gradle.properties with AAPT2 override: {}", aapt2Path)
+      gradleProps.writeText("$overrideEntry\n$optimizationsEntry\n$shrinkEntry\n$jvmArgsEntry\n")
+      log.info("Created gradle.properties with AAPT2 override and GeneralKaos666 settings: {}", aapt2Path)
       return
     }
 
-    val content = gradleProps.readText()
+    var content = gradleProps.readText()
+    var modified = false
+
     if (!content.contains("android.aapt2FromMavenOverride")) {
-      File(androidDir, "gradle.properties.bak").writeText(content)
-      gradleProps.appendText("\n$overrideEntry\n")
-      log.info("Appended AAPT2 override to gradle.properties: {}", aapt2Path)
+      content += "\n$overrideEntry\n"
+      modified = true
     } else {
-      // Replace existing entry to ensure current PREFIX is used
       val updated = content.lines().joinToString("\n") { line ->
         if (line.trim().startsWith("android.aapt2FromMavenOverride")) overrideEntry else line
       }
       if (updated != content) {
-        File(androidDir, "gradle.properties.bak").writeText(content)
-        gradleProps.writeText(updated)
-        log.info("Updated AAPT2 override in gradle.properties: {}", aapt2Path)
+        content = updated
+        modified = true
       }
+    }
+
+    if (!content.contains("android.enableResourceOptimizations")) {
+      content += "$optimizationsEntry\n"
+      modified = true
+    }
+    if (!content.contains("shrink=")) {
+      content += "$shrinkEntry\n"
+      modified = true
+    }
+    if (!content.contains("org.gradle.jvmargs")) {
+      content += "$jvmArgsEntry\n"
+      modified = true
+    }
+
+    if (modified) {
+      File(androidDir, "gradle.properties.bak").writeText(gradleProps.readText())
+      gradleProps.writeText(content)
+      log.info("Updated gradle.properties with AAPT2 override & upstream settings: {}", aapt2Path)
     }
   }
 
@@ -110,14 +159,12 @@ object FlutterProjectHelper {
       else -> return
     }
 
-    val content = targetFile.readText()
+    var content = targetFile.readText()
     val isKts = targetFile.name.endsWith(".kts")
+    var modified = false
 
-    // Check if arm64-v8a filter is already configured
+    // 1. Add arm64-v8a filter if not present
     if (!content.contains("arm64-v8a")) {
-      File(appDir, "${targetFile.name}.bak").writeText(content)
-
-      // Add abiFilters into defaultConfig.ndk if possible
       val abiLine = if (isKts) {
         "        ndk {\n            abiFilters += listOf(\"arm64-v8a\")\n        }\n"
       } else {
@@ -125,10 +172,35 @@ object FlutterProjectHelper {
       }
 
       if (content.contains("defaultConfig {")) {
-        val updated = content.replaceFirst("defaultConfig {", "defaultConfig {\n$abiLine")
-        targetFile.writeText(updated)
+        content = content.replaceFirst("defaultConfig {", "defaultConfig {\n$abiLine")
+        modified = true
         log.info("Injected arm64-v8a ABI filter into {}", targetFile.name)
       }
+    }
+
+    // 2. Disable minification and shrinking for release (GeneralKaos666 requirement)
+    if (!content.contains("isMinifyEnabled") && !content.contains("minifyEnabled false")) {
+      val releaseConfig = if (isKts) {
+        "            isMinifyEnabled = false\n            isShrinkResources = false\n"
+      } else {
+        "            minifyEnabled false\n            shrinkResources false\n"
+      }
+
+      if (content.contains("buildTypes {")) {
+        if (content.contains("release {")) {
+          content = content.replaceFirst("release {", "release {\n$releaseConfig")
+          modified = true
+        } else if (content.contains("getByName(\"release\") {")) {
+          content = content.replaceFirst("getByName(\"release\") {", "getByName(\"release\") {\n$releaseConfig")
+          modified = true
+        }
+      }
+    }
+
+    if (modified) {
+      File(appDir, "${targetFile.name}.bak").writeText(targetFile.readText())
+      targetFile.writeText(content)
+      log.info("Configured release settings in {}", targetFile.name)
     }
   }
 }

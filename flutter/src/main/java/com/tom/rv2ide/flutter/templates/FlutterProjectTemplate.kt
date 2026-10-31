@@ -149,7 +149,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.3.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -317,15 +317,18 @@ tasks.register("clean", Delete) {
 """.trimIndent()
 
 private fun androidGradleProperties() = """
-org.gradle.jvmargs=-Xmx2048M -Dkotlin.daemon.jvm.options="-Xmx512M"
+org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
 android.useAndroidX=true
 android.enableJetifier=true
-android.aapt2FromMavenOverride=/data/data/com.tom.rv2ide/files/usr/bin/aapt2
+android.aapt2FromMavenOverride=${'$'}{com.tom.rv2ide.utils.Environment.PREFIX.absolutePath}/bin/aapt2
+android.enableResourceOptimizations=false
+shrink=false
 """.trimIndent()
 
 private fun androidLocalProperties() = """
-sdk.dir=/data/data/com.tom.rv2ide/files/usr/lib/android-sdk
-flutter.sdk=/data/data/com.tom.rv2ide/files/usr/opt/flutter
+sdk.dir=${'$'}{com.tom.rv2ide.utils.Environment.ANDROID_SDK_HOME.absolutePath}
+flutter.sdk=${'$'}{com.tom.rv2ide.utils.Environment.FLUTTER_HOME.absolutePath}
+ndk.dir=${'$'}{com.tom.rv2ide.utils.Environment.ANDROID_SDK_HOME.absolutePath}/ndk/29.0.14033849
 """.trimIndent()
 
 private fun androidAppBuildGradle(pkg: String) = """
@@ -356,7 +359,7 @@ if (flutterVersionName == null) {
 android {
     namespace "$pkg"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.14033849"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -384,6 +387,8 @@ android {
 
     buildTypes {
         release {
+            isMinifyEnabled = false
+            isShrinkResources = false
             signingConfig signingConfigs.debug
         }
     }

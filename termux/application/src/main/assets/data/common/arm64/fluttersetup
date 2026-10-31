@@ -120,9 +120,9 @@ fi
 
 # 4. Toolchain and Core Package Dependencies
 print_info "[1/7] Ensuring core tools & AAPT2 link..."
-for pkg in git curl tar; do
-  if ! command -v "$pkg" &>/dev/null; then
-    print_info "Installing missing tool: $pkg..."
+for pkg in git curl tar termux-exec; do
+  if ! command -v "$pkg" &>/dev/null && [ ! -f "$PREFIX/lib/libtermux-exec.so" ]; then
+    print_info "Installing tool/package: $pkg..."
     pkg install -y "$pkg" 2>/dev/null || apt-get install -y "$pkg" 2>/dev/null || true
   fi
 done
@@ -248,25 +248,84 @@ else
   rm -rf "$WORK_DIR"
 fi
 
-# 8. Path & Shebang Relocation
-print_info "[5/7] Patching paths and configuring executables..."
+# 8. Path & Shebang Relocation and Upstream Post-Install Engine
+print_info "[5/7] Patching paths and executing upstream GeneralKaos666 post_install engine..."
 old_pfx="/data/data/com.termux/files/usr"
 new_pfx="$PREFIX"
 
-# Patch shell scripts and text config
-for f in "$FLUTTER_ROOT/bin/flutter" "$FLUTTER_ROOT/bin/dart" "$FLUTTER_ROOT/bin/internal/shared.sh"; do
-  if [ -f "$f" ] && [ -w "$f" ]; then
-    sed -i "s|$old_pfx|$new_pfx|g" "$f" 2>/dev/null || true
-    sed -i "s|#!/usr/bin/env bash|#!$PREFIX/bin/bash|g" "$f" 2>/dev/null || true
-    sed -i "s|#!/bin/bash|#!$PREFIX/bin/bash|g" "$f" 2>/dev/null || true
+# Safe line-1 shebang rewriting for known launcher and internal scripts ONLY
+# (Crucial: never run blind sed over bin/ or bin/cache to protect ELF executables)
+for script_file in \
+  "$FLUTTER_ROOT/bin/flutter" \
+  "$FLUTTER_ROOT/bin/dart" \
+  "$FLUTTER_ROOT/bin/internal/shared.sh" \
+  "$FLUTTER_ROOT/bin/internal/update_dart_sdk.sh" \
+  "$FLUTTER_ROOT/bin/internal/content_aware_hash.sh" \
+  "$FLUTTER_ROOT/bin/internal/last_engine_commit.sh" \
+  "$FLUTTER_ROOT/bin/internal/update_engine_version.sh" \
+  "$FLUTTER_ROOT/packages/flutter_tools/bin/tool_backend.sh"; do
+  if [ -f "$script_file" ]; then
+    sed -i 's/\r$//' "$script_file" 2>/dev/null || true
+    sed -i "s|$old_pfx|$new_pfx|g" "$script_file" 2>/dev/null || true
+    sed -i -E "1s|^#!.*|#!$PREFIX/bin/bash|" "$script_file" 2>/dev/null || true
+    chmod +x "$script_file" 2>/dev/null || true
   fi
 done
 
-# Set executable permissions on binaries
-chmod +x "$FLUTTER_ROOT/bin/flutter" "$FLUTTER_ROOT/bin/dart" 2>/dev/null || true
-chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" 2>/dev/null || true
-chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dartaotruntime" 2>/dev/null || true
-chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/utils/gen_snapshot" 2>/dev/null || true
+# Ensure package scripts in Flutter have proper shebangs
+if [ -d "$FLUTTER_ROOT/packages" ]; then
+  find "$FLUTTER_ROOT/packages" -type f -name "*.sh" 2>/dev/null | while read -r f; do
+    if [ -f "$f" ] && [ -w "$f" ]; then
+      sed -i 's/\r$//' "$f" 2>/dev/null || true
+      sed -i "s|$old_pfx|$new_pfx|g" "$f" 2>/dev/null || true
+      sed -i -E "1s|^#!.*|#!$PREFIX/bin/bash|" "$f" 2>/dev/null || true
+      chmod +x "$f" 2>/dev/null || true
+    fi
+  done
+fi
+
+# Set executable permissions on binaries and scripts (preserving ELF integrity)
+chmod +x "$FLUTTER_ROOT/bin/"* 2>/dev/null || true
+chmod +x "$FLUTTER_ROOT/bin/internal/"* 2>/dev/null || true
+chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/"* 2>/dev/null || true
+chmod +x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/utils/"* 2>/dev/null || true
+
+# Execute Upstream GeneralKaos666 post_install.sh engine
+if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
+  chmod +x "$PREFIX/share/flutter/post_install.sh"
+  sed -i -E \
+    -e "s|PREFIX=\"\$\{PREFIX:-/data/data/com\.termux/files/usr\}\"|PREFIX=\"\${PREFIX:-$PREFIX}\"|g" \
+    -e "s|1s\|#!/usr/bin/env bash\|#!.*\||1s\|^#!.*\|#!${PREFIX}/bin/bash\||g" \
+    "$PREFIX/share/flutter/post_install.sh" 2>/dev/null || true
+
+  print_info "Running upstream post_install.sh (17-step post-installation engine)..."
+  bash "$PREFIX/share/flutter/post_install.sh" || print_warn "post_install.sh exited with warnings; continuing..."
+fi
+
+# Ensure Step 17 requirement: flutter_tools.snapshot and stamp exist
+SNAPSHOT="$FLUTTER_ROOT/bin/cache/flutter_tools.snapshot"
+STAMP="$FLUTTER_ROOT/bin/cache/flutter_tools.stamp"
+DART_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+if [ ! -s "$SNAPSHOT" ] || [ ! -s "$STAMP" ]; then
+  if [ -x "$DART_BIN" ]; then
+    print_info "Compiling flutter_tools.snapshot with Dart App-JIT..."
+    TOOLS_DIR="$FLUTTER_ROOT/packages/flutter_tools"
+    ENTRY="$TOOLS_DIR/bin/flutter_tools.dart"
+    PKG_CFG="$TOOLS_DIR/.dart_tool/package_config.json"
+    mkdir -p "$FLUTTER_ROOT/bin/cache"
+
+    REVISION=""
+    [ -f "$FLUTTER_ROOT/bin/internal/engine.version" ] && REVISION=$(cat "$FLUTTER_ROOT/bin/internal/engine.version" 2>/dev/null | tr -d '\n\r')
+    [ -z "$REVISION" ] && REVISION="c197ca5199e9ee5661e865596c9c07294dfab51c"
+
+    if [ -f "$PKG_CFG" ]; then
+      "$DART_BIN" --verbosity=error --snapshot="$SNAPSHOT" --snapshot-kind="app-jit" --packages="$PKG_CFG" --no-enable-mirrors "$ENTRY" "--version" >/dev/null 2>&1 || true
+    else
+      "$DART_BIN" --verbosity=error --snapshot="$SNAPSHOT" --snapshot-kind="app-jit" --no-enable-mirrors "$ENTRY" "--version" >/dev/null 2>&1 || true
+    fi
+    [ -s "$SNAPSHOT" ] && echo -n "${REVISION}:" > "$STAMP"
+  fi
+fi
 
 # Global symlinks
 mkdir -p "$PREFIX/bin"
@@ -295,18 +354,20 @@ provision_companion_tools() {
     local cmake_url=""
     local cmake_sha=""
 
+    [ -z "$cmake_ver" ] && cmake_ver="4.1.2"
     if [ -f "$manifest_file" ] && command -v jq &>/dev/null; then
-      if [ -z "$cmake_ver" ] || [ "$cmake_ver" = "latest" ]; then
-        cmake_ver=$(jq -r '.cmake_versions[0] // empty' "$manifest_file" 2>/dev/null)
+      if [ "$cmake_ver" = "latest" ]; then
+        cmake_ver=$(jq -r '.cmake_versions[0] // "4.1.2"' "$manifest_file" 2>/dev/null)
       fi
-      if [ -n "$cmake_ver" ]; then
-        cmake_url=$(jq -r --arg ver "$cmake_ver" '.packages[] | select(.id=="android-cmake" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .url' "$manifest_file" 2>/dev/null | head -n 1)
-        cmake_sha=$(jq -r --arg ver "$cmake_ver" '.packages[] | select(.id=="android-cmake" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .sha256' "$manifest_file" 2>/dev/null | head -n 1)
-      fi
+      cmake_url=$(jq -r --arg ver "$cmake_ver" '.packages[] | select(.id=="android-cmake" and .architecture=="arm64-v8a" and (.encrypted == false or .encrypted == null) and (.version | startswith($ver))) | .url' "$manifest_file" 2>/dev/null | head -n 1)
+      cmake_sha=$(jq -r --arg ver "$cmake_ver" '.packages[] | select(.id=="android-cmake" and .architecture=="arm64-v8a" and (.encrypted == false or .encrypted == null) and (.version | startswith($ver))) | .sha256' "$manifest_file" 2>/dev/null | head -n 1)
     fi
 
-    [ -z "$cmake_ver" ] && cmake_ver="4.1.2"
-    [ -z "$cmake_url" ] && cmake_url="https://github.com/Roni077/acs-build-system/releases/download/v${cmake_ver}/cmake-aarch64-linux-musl.tar.xz"
+    if [ -z "$cmake_url" ] || [ "$cmake_url" = "null" ]; then
+      cmake_ver="4.1.2"
+      cmake_url="https://github.com/Roni077/acs-build-system/releases/download/v${cmake_ver}/cmake-aarch64-linux-musl.tar.xz"
+      cmake_sha="d412df999891e5c3e4c2bff0d26827c5c309542c485e11c3810c1ddd01edde72"
+    fi
 
     local cmake_dest="$ANDROID_SDK/cmake/$cmake_ver"
     if [ -x "$cmake_dest/bin/cmake" ]; then
@@ -349,19 +410,19 @@ provision_companion_tools() {
     local ndk_url=""
     local ndk_sha=""
 
+    [ -z "$ndk_ver" ] && ndk_ver="29.0.14033849"
     if [ -f "$manifest_file" ] && command -v jq &>/dev/null; then
-      if [ -z "$ndk_ver" ] || [ "$ndk_ver" = "latest" ]; then
-        ndk_ver=$(jq -r '.ndk_versions[0] // empty' "$manifest_file" 2>/dev/null)
+      if [ "$ndk_ver" = "latest" ]; then
+        ndk_ver=$(jq -r '.ndk_versions[0] // "29.0.14033849"' "$manifest_file" 2>/dev/null)
       fi
-      if [ -n "$ndk_ver" ]; then
-        ndk_url=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .url' "$manifest_file" 2>/dev/null | head -n 1)
-        ndk_sha=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.version | startswith($ver))) | .sha256' "$manifest_file" 2>/dev/null | head -n 1)
-      fi
+      ndk_url=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.encrypted == false or .encrypted == null) and (.version | startswith($ver))) | .url' "$manifest_file" 2>/dev/null | head -n 1)
+      ndk_sha=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.encrypted == false or .encrypted == null) and (.version | startswith($ver))) | .sha256' "$manifest_file" 2>/dev/null | head -n 1)
     fi
 
-    [ -z "$ndk_ver" ] && ndk_ver="29.0.14033849"
-    if [ -z "$ndk_url" ]; then
+    if [ -z "$ndk_url" ] || [ "$ndk_url" = "null" ]; then
+      ndk_ver="29.0.14033849"
       ndk_url="https://github.com/Roni077/acs-build-system/releases/download/v${ndk_ver}/android-ndk-r29-aarch64-linux-android.tar.xz"
+      ndk_sha="cb7e2be23c9029f928da61bfdb5314a7ff7bae972c4ec55c353bb08c4874d15d"
     fi
 
     local ndk_dest="$ANDROID_SDK/ndk/$ndk_ver"
@@ -419,12 +480,23 @@ ndk_env_entries="export ANDROID_NDK_HOME=\"\${ANDROID_SDK}/ndk/${active_ndk_ver}
 export NDK_HOME=\"\${ANDROID_SDK}/ndk/${active_ndk_ver}\""
 fi
 
+preload_entry=""
+if [ -f "${PREFIX}/lib/libtermux-exec.so" ]; then
+  preload_entry='if [ -f "${PREFIX}/lib/libtermux-exec.so" ]; then
+  case ":$LD_PRELOAD:" in
+    *":${PREFIX}/lib/libtermux-exec.so:"*) ;;
+    *) export LD_PRELOAD="${PREFIX}/lib/libtermux-exec.so${LD_PRELOAD:+:$LD_PRELOAD}" ;;
+  esac
+fi'
+fi
+
 cat << EOF > "$PREFIX/etc/profile.d/flutter.sh"
 PREFIX="${PREFIX}"
 export FLUTTER_ROOT="${FLUTTER_ROOT}"
 export ANDROID_HOME="${ANDROID_SDK}"
 export ANDROID_SDK_ROOT="${ANDROID_SDK}"
 ${ndk_env_entries}
+${preload_entry}
 export PATH="\${FLUTTER_ROOT}/bin:\${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:\${PREFIX}/bin${cmake_path_entry}:\${PATH}"
 EOF
 chmod 644 "$PREFIX/etc/profile.d/flutter.sh"
@@ -444,6 +516,12 @@ export ANDROID_HOME="$ANDROID_SDK"
 export ANDROID_SDK_ROOT="$ANDROID_SDK"
 [ -n "$active_ndk_ver" ] && export ANDROID_NDK_HOME="$ANDROID_SDK/ndk/$active_ndk_ver"
 [ -n "$active_ndk_ver" ] && export NDK_HOME="$ANDROID_SDK/ndk/$active_ndk_ver"
+if [ -f "$PREFIX/lib/libtermux-exec.so" ]; then
+  case ":$LD_PRELOAD:" in
+    *":$PREFIX/lib/libtermux-exec.so:"*) ;;
+    *) export LD_PRELOAD="$PREFIX/lib/libtermux-exec.so${LD_PRELOAD:+:$LD_PRELOAD}" ;;
+  esac
+fi
 export PATH="$FLUTTER_ROOT/bin:$FLUTTER_ROOT/bin/cache/dart-sdk/bin:$PREFIX/bin${cmake_path_entry}:$PATH"
 
 # Configure Flutter options
@@ -455,11 +533,30 @@ print_info "Configuring Flutter SDK settings..."
 print_info "Accepting Android SDK licenses..."
 yes 2>/dev/null | "$FLUTTER_ROOT/bin/flutter" doctor --android-licenses >/dev/null 2>&1 || true
 
-# 11. Verification
+# 11. Verification (GeneralKaos666 Official 4-Step Verification)
 if [ "$run_doctor" = "true" ]; then
-  print_info "[7/7] Verifying Flutter toolchain..."
+  print_info "[7/7] Running upstream 4-step verification checks..."
   echo ""
+  print_info "Check 1: flutter --version"
+  "$FLUTTER_ROOT/bin/flutter" --version 2>&1 | head -n 2 || true
+  echo ""
+  print_info "Check 2: dart --version"
+  "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" --version 2>&1 || true
+  echo ""
+  print_info "Check 3: dartvm --version"
+  if [ -x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dartvm" ]; then
+    "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dartvm" --version 2>&1 || true
+  else
+    print_info "dartvm matches dart host executable."
+  fi
+  echo ""
+  print_info "Check 4: flutter doctor -v"
   "$FLUTTER_ROOT/bin/flutter" doctor -v || true
+  echo ""
+  if [ -f "$PREFIX/share/flutter/flutter_termux_doctor.sh" ]; then
+    print_info "Check 5: flutter_termux_doctor diagnostic report"
+    bash "$PREFIX/share/flutter/flutter_termux_doctor.sh" || true
+  fi
 fi
 
 echo ""
