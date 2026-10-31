@@ -13,10 +13,27 @@ Blue='\033[0;34m'
 Orange='\e[38;5;208m'
 Cyan='\033[0;36m'
 
-print_info() { printf "${Blue}[ INFO ] %s${Color_Off}\n" "$1"; }
-print_success() { printf "${Green}[ SUCCESS ] %s${Color_Off}\n" "$1"; }
-print_warn() { printf "${Orange}[ WARNING ] %s${Color_Off}\n" "$1"; }
-print_err() { printf "${Red}[ ERROR ] %s${Color_Off}\n" "$1"; }
+SETUP_LOG="${SETUP_LOG:-$HOME/setup_output.log}"
+export SETUP_LOG
+
+write_setup_log() {
+  local lvl="$1"
+  shift
+  local raw_msg="$*"
+  local clean_msg
+  clean_msg=$(printf "%s" "$raw_msg" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+  local ts
+  ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
+  local log_dir
+  log_dir="$(dirname "$SETUP_LOG")"
+  [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
+  printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+}
+
+print_info() { printf "${Blue}[ INFO ] %s${Color_Off}\n" "$1"; write_setup_log "INFO" "$1"; }
+print_success() { printf "${Green}[ SUCCESS ] %s${Color_Off}\n" "$1"; write_setup_log "SUCCESS" "$1"; }
+print_warn() { printf "${Orange}[ WARNING ] %s${Color_Off}\n" "$1"; write_setup_log "WARN" "$1"; }
+print_err() { printf "${Red}[ ERROR ] %s${Color_Off}\n" "$1" >&2; write_setup_log "ERROR" "$1"; }
 
 echo ""
 printf "${Cyan}====================================================${Color_Off}\n"
@@ -170,6 +187,10 @@ echo "Check 4: flutter doctor -v"
 "$FLUTTER_ROOT/bin/flutter" doctor -v || true
 
 echo ""
+write_setup_log "SUMMARY" "================================================================================"
+write_setup_log "SUMMARY" "FLUTTER_PATCH_STATUS=SUCCESS"
+write_setup_log "SUMMARY" "COMPLETED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'now')"
+write_setup_log "SUMMARY" "================================================================================"
 print_success "===================================================="
 print_success " Flutter SDK patch completed successfully!"
 print_success ""

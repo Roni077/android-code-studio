@@ -18,13 +18,31 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-log_info()    { echo -e "${BLUE}[INFO]${NC} $*"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
-log_warn()    { echo -e "${YELLOW}[WARNING]${NC} $*"; }
-log_err()     { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+SETUP_LOG="${SETUP_LOG:-$HOME/setup_output.log}"
+export SETUP_LOG
+
+write_setup_log() {
+  local lvl="$1"
+  shift
+  local raw_msg="$*"
+  local clean_msg
+  clean_msg=$(printf "%s" "$raw_msg" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+  local ts
+  ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
+  local log_dir
+  log_dir="$(dirname "$SETUP_LOG")"
+  [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
+  printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+}
+
+log_info()    { echo -e "${BLUE}[INFO]${NC} $*"; write_setup_log "INFO" "$*"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; write_setup_log "SUCCESS" "$*"; }
+log_warn()    { echo -e "${YELLOW}[WARNING]${NC} $*"; write_setup_log "WARN" "$*"; }
+log_err()     { echo -e "${RED}[ERROR]${NC} $*" >&2; write_setup_log "ERROR" "$*"; }
 log_section() {
   echo ""
   echo -e "${CYAN}${BOLD}=== $* ===${NC}"
+  write_setup_log "SECTION" "=== $* ==="
 }
 
 # --- 1. Environment Auto-Detection ---
@@ -514,8 +532,16 @@ fi
 log_section "Summary"
 if [ "$FAIL_COUNT" -eq 0 ]; then
   log_success "Flutter toolchain is properly installed and verified according to GeneralKaos666/flutter-for-termux specifications!"
+  write_setup_log "SUMMARY" "================================================================================"
+  write_setup_log "SUMMARY" "SETUP_STATUS=SUCCESS"
+  write_setup_log "SUMMARY" "COMPLETED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'now')"
+  write_setup_log "SUMMARY" "================================================================================"
   exit 0
 else
   log_err "Encountered $FAIL_COUNT check failure(s). Please review the logs above."
+  write_setup_log "SUMMARY" "================================================================================"
+  write_setup_log "SUMMARY" "SETUP_STATUS=FAILED (FailCount: $FAIL_COUNT)"
+  write_setup_log "SUMMARY" "FAILED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'now')"
+  write_setup_log "SUMMARY" "================================================================================"
   exit 1
 fi

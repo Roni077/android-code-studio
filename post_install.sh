@@ -4,9 +4,28 @@
 
 set -e
 
+# Unified setup debug logging ($HOME/setup_output.log)
+SETUP_LOG="${SETUP_LOG:-$HOME/setup_output.log}"
+export SETUP_LOG
+
+write_setup_log() {
+	local lvl="$1"
+	shift
+	local raw_msg="$*"
+	local clean_msg
+	clean_msg=$(printf "%s" "$raw_msg" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+	local ts
+	ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
+	local log_dir
+	log_dir="$(dirname "$SETUP_LOG")"
+	[ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
+	printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+}
+
 echo "=========================================="
 echo "Flutter Termux Post-Install Configuration"
 echo "=========================================="
+write_setup_log "POST_INSTALL" "Flutter Termux Post-Install Configuration started"
 
 # Path definitions
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
@@ -1874,6 +1893,11 @@ finalize_flutter_tools_cache || {
 ensure_profile_env
 
 echo ""
+
+write_setup_log "SUMMARY" "================================================================================"
+write_setup_log "SUMMARY" "POST_INSTALL_STATUS=SUCCESS"
+write_setup_log "SUMMARY" "COMPLETED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'now')"
+write_setup_log "SUMMARY" "================================================================================"
 
 echo "=========================================="
 echo "Post-install configuration complete!"

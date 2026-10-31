@@ -185,6 +185,27 @@ else
     echo "Skipped: flutter not found"
 fi
 echo ""
+
+echo -e "${BLUE}[6] Setup Output Log & Provisioning History:${NC}"
+SETUP_LOG_FILE="${SETUP_LOG:-$HOME/setup_output.log}"
+if [ -f "$SETUP_LOG_FILE" ]; then
+    log_size=$(wc -c < "$SETUP_LOG_FILE" 2>/dev/null || echo "0")
+    echo "  Log Path        : $SETUP_LOG_FILE ($log_size bytes)"
+    last_session=$(grep "SETUP SESSION STARTED" "$SETUP_LOG_FILE" 2>/dev/null | tail -n 1 || echo "")
+    [ -n "$last_session" ] && echo "  Last Session    : $last_session"
+    last_status=$(grep -E "(SETUP_STATUS=|FLUTTER_SETUP_STATUS=|POST_INSTALL_STATUS=)" "$SETUP_LOG_FILE" 2>/dev/null | tail -n 1 || echo "")
+    if echo "$last_status" | grep -q "SUCCESS"; then
+        echo -e "  Setup Status    : ${GREEN}$last_status${NC}"
+    elif [ -n "$last_status" ]; then
+        echo -e "  Setup Status    : ${RED}$last_status${NC}"
+    else
+        echo -e "  Setup Status    : ${YELLOW}IN_PROGRESS or UNKNOWN${NC}"
+    fi
+    echo "  Inspect Log     : cat $SETUP_LOG_FILE (or tail -n 50 $SETUP_LOG_FILE)"
+else
+    echo -e "  Log Path        : ${YELLOW}NOT FOUND ($SETUP_LOG_FILE)${NC}"
+fi
+echo ""
 echo -e "${CYAN}======================================================${NC}"
 echo -e "${CYAN}             End of Diagnostic Report                 ${NC}"
 echo -e "${CYAN}======================================================${NC}"
