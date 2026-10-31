@@ -89,5 +89,39 @@ enum class BackupCategory(
 
     companion object {
         fun fromId(id: String): BackupCategory? = entries.find { it.id.equals(id, ignoreCase = true) }
+
+        fun fromRelativePath(path: String): BackupCategory? {
+            val cleanPath = path.removePrefix("./").removePrefix("/")
+            return when {
+                // Termux format: ./home/ and ./usr/
+                cleanPath.startsWith("home/.androidide/preferences/") -> PREFERENCES
+                cleanPath.startsWith("home/.androidide/ui/") -> FONTS
+                cleanPath.startsWith("home/.androidide/editor/schemes/") -> COLOR_SCHEMES
+                cleanPath.startsWith("home/.androidide/recent_projects.json") -> RECENT_PROJECTS
+                cleanPath.startsWith("home/.androidide/lsp/") -> LSP_SERVERS
+                cleanPath.startsWith("home/android-sdk/") -> ANDROID_SDK
+                cleanPath.startsWith("home/flutter-sdk/") || cleanPath.startsWith("home/.pub-cache/") -> FLUTTER_SDK
+                cleanPath.startsWith("usr/opt/flutter/") -> FLUTTER_SDK
+                cleanPath.startsWith("home/.gradle/caches/") || cleanPath.startsWith("home/.gradle/wrapper/") -> GRADLE_CACHE
+                cleanPath.startsWith("home/.gradle/init.gradle") || cleanPath.startsWith("home/.gradle/init.d/") -> GRADLE_INIT
+                cleanPath.startsWith("home/.bashrc") || cleanPath.startsWith("home/.profile") ||
+                        cleanPath.startsWith("home/.gitconfig") || cleanPath.startsWith("home/.termux/") -> TERMINAL_CONFIG
+                cleanPath.startsWith("usr/") || cleanPath.startsWith("home/bin/") ||
+                        cleanPath.startsWith("home/.config/") || cleanPath.startsWith("home/.local/") -> TERMINAL_ENVIRONMENT
+
+                // Legacy ACS zip format
+                cleanPath.startsWith("preferences/") -> PREFERENCES
+                cleanPath.startsWith("ui/fonts/") -> FONTS
+                cleanPath.startsWith("ui/schemes/") -> COLOR_SCHEMES
+                cleanPath.startsWith("init/") -> GRADLE_INIT
+                cleanPath.startsWith("terminal/env/") -> TERMINAL_ENVIRONMENT
+                cleanPath.startsWith("terminal/") -> TERMINAL_CONFIG
+                cleanPath.startsWith("toolchains/sdk/") -> ANDROID_SDK
+                cleanPath.startsWith("toolchains/flutter/") || cleanPath.startsWith("toolchains/pub-cache/") -> FLUTTER_SDK
+                cleanPath.startsWith("toolchains/gradle/") -> GRADLE_CACHE
+                cleanPath.startsWith("toolchains/lsp/") -> LSP_SERVERS
+                else -> null
+            }
+        }
     }
 }

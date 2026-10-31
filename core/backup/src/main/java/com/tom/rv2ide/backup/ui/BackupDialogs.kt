@@ -82,8 +82,14 @@ object BackupDialogs {
 
         val appVersionStr = manifest?.appVersion ?: "Unknown"
         val deviceStr = manifest?.deviceInfo ?: "Unknown"
+        val formatBadge = if (inspection.isTermuxTarball) {
+            "Format: ${inspection.format.displayName} (Termux standard ./home & ./usr)"
+        } else {
+            "Format: ${inspection.format.displayName}"
+        }
 
         val headerMessage = StringBuilder()
+            .append(formatBadge).append("\n")
             .append("Backup Date: ").append(dateStr).append("\n")
             .append("App Version: ").append(appVersionStr).append("\n")
             .append("Device: ").append(deviceStr).append("\n\n")

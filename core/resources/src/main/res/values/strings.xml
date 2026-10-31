@@ -1068,7 +1068,7 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="backup_restore_summary">Backup and restore IDE preferences, custom fonts, color schemes, and tooling configurations</string>
   <string name="backup_group_title">Backup</string>
   <string name="backup_create_title">Create Backup</string>
-  <string name="backup_create_summary">Export IDE settings, fonts, schemes, and configurations to a zip archive</string>
+  <string name="backup_create_summary">Export IDE settings, toolchains, and environment to a Termux-compatible tar.gz archive</string>
   <string name="backup_export_json_title">Export Settings Only (.json)</string>
   <string name="backup_export_json_summary">Export all IDE preferences into a portable JSON file</string>
   <string name="restore_group_title">Restore</string>
@@ -1079,7 +1079,7 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="backup_reset_summary">Reset all IDE preferences and configurations to default values</string>
   <string name="backup_about_group_title">About Backup &amp; Restore</string>
   <string name="backup_about_info_title">Backup Information</string>
-  <string name="backup_about_info_summary">Backups are stored as standard .zip archives containing your preferences, fonts, color schemes, and configuration scripts. Hardware-bound credentials like Keystore tokens are excluded for security and cross-device portability.</string>
+  <string name="backup_about_info_summary">Backups are stored as standard Termux-compatible .tar.gz archives containing ./home and ./usr filesystem hierarchies. They preserve POSIX file permissions, symlinks, and are directly compatible with the terminal tar command.</string>
 
   <!-- Backup Categories -->
   <string name="backup_category_preferences">IDE Preferences &amp; Settings</string>
@@ -1127,6 +1127,7 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="backup_applied_title">Settings Restored &amp; Applied</string>
   <string name="preset_quick_settings">Settings Only</string>
   <string name="preset_complete_toolchain">Complete Toolchain</string>
+  <string name="preset_termux_full_environment">Full Environment (Termux Standard)</string>
   <string name="backup_json_restore_confirm_title">Restore Settings?</string>
   <string name="backup_json_restore_confirm_message">Restoring settings from JSON will update all IDE preferences. Changes will be applied immediately.</string>
   <string name="action_restore_existing_toolchain">Already have a backup? Restore toolchains to skip downloading</string>

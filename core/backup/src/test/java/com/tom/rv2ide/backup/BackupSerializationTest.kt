@@ -12,7 +12,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *   along with AndroidCodeStudio.  If not, see <https://www.gnu.org/licenses/>.
+ *  along with AndroidCodeStudio.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 package com.tom.rv2ide.backup
@@ -21,13 +21,18 @@ import com.google.gson.Gson
 import com.tom.rv2ide.backup.models.BackupCategory
 import com.tom.rv2ide.backup.models.BackupManifest
 import com.tom.rv2ide.backup.models.BackupPreset
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
+import org.apache.commons.compress.compressors.gzip.GzipParameters
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
+import java.util.zip.Deflater
 
 class BackupSerializationTest {
 
@@ -53,6 +58,25 @@ class BackupSerializationTest {
     }
 
     @Test
+    fun testBackupCategoryFromRelativePath() {
+        assertEquals(BackupCategory.ANDROID_SDK, BackupCategory.fromRelativePath("home/android-sdk/platforms/android-34"))
+        assertEquals(BackupCategory.ANDROID_SDK, BackupCategory.fromRelativePath("./home/android-sdk/build-tools/34.0.0/aapt2"))
+        assertEquals(BackupCategory.FLUTTER_SDK, BackupCategory.fromRelativePath("usr/opt/flutter/bin/flutter"))
+        assertEquals(BackupCategory.FLUTTER_SDK, BackupCategory.fromRelativePath("home/.pub-cache/hosted/pub.dev/foo"))
+        assertEquals(BackupCategory.PREFERENCES, BackupCategory.fromRelativePath("home/.androidide/preferences/ide_preferences.json"))
+        assertEquals(BackupCategory.FONTS, BackupCategory.fromRelativePath("home/.androidide/ui/JetBrainsMono.ttf"))
+        assertEquals(BackupCategory.COLOR_SCHEMES, BackupCategory.fromRelativePath("home/.androidide/editor/schemes/dracula.json"))
+        assertEquals(BackupCategory.GRADLE_CACHE, BackupCategory.fromRelativePath("home/.gradle/caches/modules-2/files-2.1"))
+        assertEquals(BackupCategory.TERMINAL_CONFIG, BackupCategory.fromRelativePath("home/.bashrc"))
+        assertEquals(BackupCategory.TERMINAL_ENVIRONMENT, BackupCategory.fromRelativePath("usr/bin/tar"))
+
+        // Legacy ACS ZIP paths
+        assertEquals(BackupCategory.ANDROID_SDK, BackupCategory.fromRelativePath("toolchains/sdk/build-tools/34.0.0/aapt2"))
+        assertEquals(BackupCategory.FLUTTER_SDK, BackupCategory.fromRelativePath("toolchains/flutter/bin/flutter"))
+        assertEquals(BackupCategory.PREFERENCES, BackupCategory.fromRelativePath("preferences/ide_preferences.json"))
+    }
+
+    @Test
     fun testBackupPresets() {
         val quick = BackupPreset.QUICK_SETTINGS.getCategories()
         assertTrue(quick.contains(BackupCategory.PREFERENCES))
@@ -61,10 +85,13 @@ class BackupSerializationTest {
         assertFalse(quick.contains(BackupCategory.FLUTTER_SDK))
 
         val complete = BackupPreset.COMPLETE_TOOLCHAIN.getCategories()
-        assertEquals(BackupCategory.entries.size, complete.size)
         assertTrue(complete.contains(BackupCategory.ANDROID_SDK))
         assertTrue(complete.contains(BackupCategory.FLUTTER_SDK))
         assertTrue(complete.contains(BackupCategory.GRADLE_CACHE))
+
+        val termuxFull = BackupPreset.TERMUX_FULL_ENVIRONMENT.getCategories()
+        assertEquals(BackupCategory.entries.size, termuxFull.size)
+        assertTrue(termuxFull.contains(BackupCategory.TERMINAL_ENVIRONMENT))
     }
 
     @Test
@@ -154,14 +181,86 @@ class BackupSerializationTest {
     }
 
     @Test
-    fun testMagicByteZipDetection() {
+    fun testMagicByteDetections() {
         val zipBytes = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0x00, 0x00)
         assertTrue(BackupManager.isZipStream(zipBytes))
 
+        val gzipBytes = byteArrayOf(0x1F, 0x8B.toByte(), 0x08, 0x00)
+        assertTrue(BackupManager.isGzipStream(gzipBytes))
+
         val jsonBytes = "{\"format\":\"acs_preferences_dump\"}".toByteArray(StandardCharsets.UTF_8)
         assertFalse(BackupManager.isZipStream(jsonBytes))
+        assertFalse(BackupManager.isGzipStream(jsonBytes))
+    }
 
-        val shortBytes = byteArrayOf(0x50, 0x4B)
-        assertFalse(BackupManager.isZipStream(shortBytes))
+    @Test
+    fun testTarGzCreationAndPOSIXStructure() {
+        val baos = ByteArrayOutputStream()
+        val gzipParams = GzipParameters().apply {
+            compressionLevel = Deflater.BEST_SPEED
+        }
+        val gzipOut = GzipCompressorOutputStream(baos, gzipParams)
+        val tarOut = TarArchiveOutputStream(gzipOut).apply {
+            setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
+            setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX)
+        }
+
+        // Add regular file in home/
+        val homeContent = "echo 'Hello Termux ACS'".toByteArray(StandardCharsets.UTF_8)
+        val homeEntry = TarArchiveEntry("home/.bashrc").apply {
+            size = homeContent.size.toLong()
+            mode = 420 // 0644
+        }
+        tarOut.putArchiveEntry(homeEntry)
+        tarOut.write(homeContent)
+        tarOut.closeArchiveEntry()
+
+        // Add binary in usr/bin/
+        val binContent = "#!/bin/sh\necho acs".toByteArray(StandardCharsets.UTF_8)
+        val binEntry = TarArchiveEntry("usr/bin/acs").apply {
+            size = binContent.size.toLong()
+            mode = 493 // 0755
+        }
+        tarOut.putArchiveEntry(binEntry)
+        tarOut.write(binContent)
+        tarOut.closeArchiveEntry()
+
+        // Add symbolic link in home/
+        val symlinkEntry = TarArchiveEntry("home/flutter-sdk", TarArchiveEntry.LF_SYMLINK).apply {
+            linkName = "../usr/opt/flutter"
+            mode = 511 // 0777
+        }
+        tarOut.putArchiveEntry(symlinkEntry)
+        tarOut.closeArchiveEntry()
+
+        tarOut.finish()
+        gzipOut.finish()
+
+        val archiveBytes = baos.toByteArray()
+        assertTrue(archiveBytes.size > 0)
+        assertTrue(BackupManager.isGzipStream(archiveBytes))
+
+        // Read back and verify entries
+        val bais = ByteArrayInputStream(archiveBytes)
+        val gzipIn = GzipCompressorInputStream(bais)
+        val tarIn = TarArchiveInputStream(gzipIn)
+
+        val entryNames = mutableListOf<String>()
+        var entry: TarArchiveEntry? = tarIn.nextTarEntry
+        while (entry != null) {
+            entryNames.add(entry.name)
+            if (entry.name == "usr/bin/acs") {
+                assertEquals(493, entry.mode)
+            }
+            if (entry.name == "home/flutter-sdk") {
+                assertTrue(entry.isSymbolicLink)
+                assertEquals("../usr/opt/flutter", entry.linkName)
+            }
+            entry = tarIn.nextTarEntry
+        }
+
+        assertTrue(entryNames.contains("home/.bashrc"))
+        assertTrue(entryNames.contains("usr/bin/acs"))
+        assertTrue(entryNames.contains("home/flutter-sdk"))
     }
 }

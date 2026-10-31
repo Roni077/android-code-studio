@@ -17,11 +17,21 @@
 
 package com.tom.rv2ide.backup.models
 
+enum class ArchiveFormat(val displayName: String, val extension: String) {
+    TAR_GZ("Termux Tarball (.tar.gz)", ".tar.gz"),
+    TAR_XZ("Termux Tarball (.tar.xz)", ".tar.xz"),
+    ZIP("ACS Archive (.zip)", ".zip"),
+    JSON("Preferences File (.json)", ".json")
+}
+
 data class BackupInspection(
     val isValid: Boolean,
     val manifest: BackupManifest? = null,
+    val format: ArchiveFormat = ArchiveFormat.TAR_GZ,
     val availableCategories: Set<BackupCategory> = emptySet(),
     val isStandaloneJson: Boolean = false,
+    val isTermuxTarball: Boolean = false,
     val preferenceFilesCount: Int = 0,
+    val totalUncompressedBytes: Long = 0L,
     val errorMessage: String? = null
 )

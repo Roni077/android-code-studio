@@ -19,7 +19,8 @@ package com.tom.rv2ide.backup.models
 
 enum class BackupPreset {
     QUICK_SETTINGS,
-    COMPLETE_TOOLCHAIN;
+    COMPLETE_TOOLCHAIN,
+    TERMUX_FULL_ENVIRONMENT;
 
     fun getCategories(): Set<BackupCategory> {
         return when (this) {
@@ -31,7 +32,19 @@ enum class BackupPreset {
                 BackupCategory.TERMINAL_CONFIG,
                 BackupCategory.RECENT_PROJECTS
             )
-            COMPLETE_TOOLCHAIN -> BackupCategory.entries.toSet()
+            COMPLETE_TOOLCHAIN -> setOf(
+                BackupCategory.PREFERENCES,
+                BackupCategory.COLOR_SCHEMES,
+                BackupCategory.FONTS,
+                BackupCategory.GRADLE_INIT,
+                BackupCategory.TERMINAL_CONFIG,
+                BackupCategory.RECENT_PROJECTS,
+                BackupCategory.ANDROID_SDK,
+                BackupCategory.FLUTTER_SDK,
+                BackupCategory.GRADLE_CACHE,
+                BackupCategory.LSP_SERVERS
+            )
+            TERMUX_FULL_ENVIRONMENT -> BackupCategory.entries.toSet()
         }
     }
 }

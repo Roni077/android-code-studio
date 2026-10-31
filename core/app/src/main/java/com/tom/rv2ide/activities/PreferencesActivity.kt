@@ -65,7 +65,7 @@ class PreferencesActivity :
   private var pendingBackupCategories: Set<BackupCategory> = emptySet()
 
   private val createBackupLauncher =
-      registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+      registerForActivityResult(ActivityResultContracts.CreateDocument("application/gzip")) { uri ->
         if (uri != null) {
           executeBackup(uri, pendingBackupCategories)
         }
@@ -138,7 +138,7 @@ class PreferencesActivity :
     BackupDialogs.showBackupCategorySelector(this) { selectedCategories ->
       pendingBackupCategories = selectedCategories
       val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-      val defaultFileName = "acs-backup-${sdf.format(Date())}.zip"
+      val defaultFileName = "acs-backup-${sdf.format(Date())}.tar.gz"
       createBackupLauncher.launch(defaultFileName)
     }
   }
@@ -151,7 +151,15 @@ class PreferencesActivity :
 
   fun startRestoreBackupFlow() {
     restoreBackupLauncher.launch(
-        arrayOf("application/zip", "application/json", "application/octet-stream", "*/*")
+        arrayOf(
+            "application/gzip",
+            "application/x-gzip",
+            "application/x-tar",
+            "application/zip",
+            "application/json",
+            "application/octet-stream",
+            "*/*"
+        )
     )
   }
 

@@ -150,7 +150,14 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
     content.apply {
       btnRestoreToolchain.setOnClickListener {
         restoreToolchainLauncher.launch(
-            arrayOf("application/zip", "application/octet-stream", "*/*")
+            arrayOf(
+                "application/gzip",
+                "application/x-gzip",
+                "application/x-tar",
+                "application/zip",
+                "application/octet-stream",
+                "*/*"
+            )
         )
       }
 
