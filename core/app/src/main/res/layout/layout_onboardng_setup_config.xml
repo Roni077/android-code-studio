@@ -66,48 +66,6 @@
 
   </androidx.appcompat.widget.LinearLayoutCompat>
 
-  <com.google.android.material.card.MaterialCardView
-    android:id="@+id/card_restore_backup"
-    style="@style/Widget.Material3.CardView.Filled"
-    android:layout_width="0dp"
-    android:layout_height="wrap_content"
-    android:layout_marginTop="8dp"
-    app:cardCornerRadius="16dp"
-    app:layout_constraintEnd_toEndOf="parent"
-    app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintTop_toBottomOf="@id/connection_info_container">
-
-    <androidx.appcompat.widget.LinearLayoutCompat
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:orientation="horizontal"
-      android:padding="12dp"
-      android:gravity="center_vertical">
-
-      <ImageView
-        android:layout_width="28dp"
-        android:layout_height="28dp"
-        android:src="@drawable/ic_restore"
-        app:tint="?attr/colorPrimary" />
-
-      <TextView
-        android:id="@+id/tv_restore_prompt"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_marginStart="12dp"
-        android:text="@string/action_restore_existing_toolchain"
-        android:textAppearance="?attr/textAppearanceBodySmall" />
-
-      <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_restore_toolchain"
-        style="@style/Widget.Material3.Button.TonalButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/btn_restore" />
-    </androidx.appcompat.widget.LinearLayoutCompat>
-  </com.google.android.material.card.MaterialCardView>
-
   <com.google.android.material.checkbox.MaterialCheckBox
     android:id="@+id/install_git"
     android:layout_width="wrap_content"
@@ -145,7 +103,7 @@
     android:text="@string/action_auto_install"
     app:layout_constraintEnd_toEndOf="parent"
     app:layout_constraintStart_toStartOf="parent"
-    app:layout_constraintTop_toBottomOf="@id/card_restore_backup" />
+    app:layout_constraintTop_toBottomOf="@id/connection_info_container" />
 
   <com.google.android.material.textfield.TextInputLayout
     android:id="@+id/jdk_version_layout"

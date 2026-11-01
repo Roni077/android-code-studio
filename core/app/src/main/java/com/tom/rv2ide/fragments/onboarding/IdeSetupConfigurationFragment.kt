@@ -35,11 +35,6 @@ import android.text.SpannableStringBuilder
 import android.text.style.URLSpan
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
-import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.tom.rv2ide.backup.BackupManager
-import com.tom.rv2ide.backup.models.BackupCategory
 import androidx.core.content.getSystemService
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
@@ -72,53 +67,6 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
   private var backgroundDataRestrictionReceiver: BroadcastReceiver? = null
   private var networkStateChangeCallback: NetworkCallback? = null
 
-  private val restoreToolchainLauncher =
-      registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-          executeRestoreToolchain(uri)
-        }
-      }
-
-  private fun executeRestoreToolchain(uri: android.net.Uri) {
-    viewLifecycleOwner.lifecycleScope.launch {
-      val progressDialog = MaterialAlertDialogBuilder(requireContext())
-          .setMessage(R.string.backup_restoring_progress)
-          .setCancelable(false)
-          .show()
-
-      try {
-        val inputStream = requireContext().contentResolver.openInputStream(uri)
-        if (inputStream == null) {
-          progressDialog.dismiss()
-          Toast.makeText(requireContext(), "Failed to open backup file", Toast.LENGTH_LONG).show()
-          return@launch
-        }
-
-        val result = BackupManager.restoreBackup(
-            requireContext(),
-            inputStream,
-            BackupCategory.entries.toSet()
-        )
-        progressDialog.dismiss()
-
-        result.onSuccess {
-          content.tvRestorePrompt.setText(R.string.msg_toolchains_restored)
-          content.autoInstallSwitch.isChecked = false
-          Toast.makeText(requireContext(), R.string.msg_toolchains_restored, Toast.LENGTH_LONG).show()
-        }.onFailure { error ->
-          MaterialAlertDialogBuilder(requireContext())
-              .setTitle("Restore Failed")
-              .setMessage(error.message ?: "Unknown error")
-              .setPositiveButton(android.R.string.ok, null)
-              .show()
-        }
-      } catch (e: Exception) {
-        progressDialog.dismiss()
-        Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_LONG).show()
-      }
-    }
-  }
-
   companion object {
 
     @JvmStatic
@@ -148,23 +96,6 @@ class IdeSetupConfigurationFragment : OnboardingFragment(), SlidePolicy {
     _content = LayoutOnboardngSetupConfigBinding.inflate(layoutInflater, parent, attachToParent)
 
     content.apply {
-      btnRestoreToolchain.setOnClickListener {
-        restoreToolchainLauncher.launch(
-            arrayOf(
-                "application/gzip",
-                "application/x-gzip",
-                "application/x-tar",
-                "application/zip",
-                "application/octet-stream",
-                "*/*"
-            )
-        )
-      }
-
-      if (Environment.ANDROID_HOME.exists()) {
-        tvRestorePrompt.setText(R.string.msg_toolchains_restored)
-      }
-
       noConnection.root.setText(R.string.msg_no_internet)
       cellularConnection.root.setText(R.string.msg_connected_to_cellular)
       meteredConnection.root.setText(R.string.msg_connected_to_metered_connection)
