@@ -1,4 +1,4 @@
-#!/data/user/0/com.tom.rv2ide/files/usr/bin/bash
+#!/data/data/com.tom.rv2ide/files/usr/bin/bash
 # ==============================================================================
 # install_and_verify_flutter.sh
 #
@@ -117,12 +117,35 @@ DEB_NAME="flutter_3.47.9-1_aarch64.deb"
 DEB_URL="https://github.com/GeneralKaos666/flutter-for-termux/releases/download/3.47.9/${DEB_NAME}"
 CACHED_DEB="$CACHE_DIR/$DEB_NAME"
 
+print_help() {
+  cat << EOF
+Android Code Studio • Flutter Install & Verification Suite
+Usage: $(basename "$0") [options] [target_flutter_project]
+
+Options:
+  -h, --help        Show this help message and exit
+  --dry-run         Verify environment and dependencies without installing or modifying files
+  --clean           Remove cached packages from $CACHE_DIR and exit
+  --clean-cache     Remove downloaded archives after extraction
+  --keep-cache      Preserve downloaded archives after extraction
+
+Arguments:
+  target_flutter_project  (Optional) Path to a Flutter project to configure for Android Code Studio
+EOF
+}
+
 CLEAN_CACHE=false
 KEEP_CACHE=false
+DRY_RUN=false
 TARGET_PROJECT=""
 
 for arg in "$@"; do
   case "$arg" in
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    --dry-run) DRY_RUN=true ;;
     --clean-cache) CLEAN_CACHE=true ;;
     --keep-cache) KEEP_CACHE=true ;;
     --clean)
@@ -171,7 +194,10 @@ else
 fi
 
 if [ "$dart_broken" -eq 1 ]; then
-  log_warn "Restoring pristine uncorrupted Dart SDK from upstream package..."
+  if [ "$DRY_RUN" = "true" ]; then
+    log_info "[DRY-RUN] Dart binary is broken or missing; skipping recovery in dry-run mode."
+  else
+    log_warn "Restoring pristine uncorrupted Dart SDK from upstream package..."
 
   # Find deb package or download
   found_deb=""
@@ -275,6 +301,12 @@ if [ "$dart_broken" -eq 1 ]; then
     log_info "Removing cached package $CACHED_DEB..."
     rm -f "$CACHED_DEB"
   fi
+  fi
+fi
+
+if [ "$DRY_RUN" = "true" ]; then
+  log_info "[DRY-RUN] Environment verification complete. Skipping execution phases."
+  exit 0
 fi
 
 # Quick test of recovered binary

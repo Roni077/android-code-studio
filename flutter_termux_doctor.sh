@@ -1,8 +1,21 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/data/data/com.tom.rv2ide/files/usr/bin/bash
 # scripts/install/flutter_termux_doctor.sh
 # Comprehensive diagnostic tool for Flutter on Termux with PII redaction
 
 set -u
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            echo "Flutter Termux Diagnostic Report Tool"
+            echo "Usage: $(basename "$0") [options]"
+            echo ""
+            echo "Options:"
+            echo "  -h, --help    Show this diagnostic help message and exit"
+            exit 0
+            ;;
+    esac
+done
 
 if [ -z "${PREFIX:-}" ]; then
     if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then

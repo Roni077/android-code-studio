@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/data/data/com.tom.rv2ide/files/usr/bin/bash
 # Flutter Termux Post-Install Script
 # Run this script after installing the deb package to configure the APK build environment
 
@@ -115,6 +115,27 @@ if [ -f "$PREFIX/share/flutter/manifest.json" ]; then
 	[ -n "${TERMUX_NDK_VERSION:-}" ] && NDK_VERSION="$TERMUX_NDK_VERSION"
 fi
 
+show_help() {
+	echo "Usage: post_install.sh [options]"
+	echo ""
+	echo "Flutter on Termux / Android Code Studio post-install patch & configuration engine."
+	echo ""
+	echo "Options:"
+	echo "  --check          Verify patch integrity without modifying files"
+	echo "  --apply          Apply all 17 post-installation patches (default)"
+	echo "  --status         Display current patch application status"
+	echo "  --rollback       Rollback applied patches from backup"
+	echo "  --provision-ndk  Download and install pinned Android NDK (HomuHomu833 r30)"
+	echo "  --lib            Source as library without executing main routine"
+	echo "  -h, --help       Show this help message"
+	echo ""
+}
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+	show_help
+	exit 0
+fi
+
 MODE="${MODE:-apply}"
 if [ "${1:-}" = "--check" ]; then MODE="check"; fi
 if [ "${1:-}" = "--apply" ]; then MODE="apply"; fi
@@ -124,9 +145,9 @@ if [ "${1:-}" = "--provision-ndk" ]; then MODE="provision-ndk"; fi
 if [ "${1:-}" = "--lib" ]; then MODE="lib"; fi
 
 if [ "$MODE" != "status" ] && [ "$MODE" != "check" ] && [ "$MODE" != "lib" ] && [ "$MODE" != "provision-ndk" ]; then
-	mkdir -p "$BACKUP_DIR" "$(dirname "$PATCH_STATE_FILE")"
+	mkdir -p "$BACKUP_DIR" "$(dirname "$PATCH_STATE_FILE")" 2>/dev/null || true
 	if [ ! -f "$PATCH_STATE_FILE" ]; then
-		echo "{}" >"$PATCH_STATE_FILE"
+		echo "{}" >"$PATCH_STATE_FILE" 2>/dev/null || true
 	fi
 fi
 

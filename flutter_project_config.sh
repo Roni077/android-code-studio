@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/data/data/com.tom.rv2ide/files/usr/bin/bash
 # scripts/install/flutter_project_config.sh
 # Configure a Flutter project for Termux environment (Mode A / Mode B compatible & transactional)
 
@@ -20,6 +20,17 @@ POSITIONAL_ARGS=()
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        -h|--help)
+            echo "Android Code Studio • Flutter Project Configuration Tool"
+            echo "Usage: $0 [options] <flutter_project_path>"
+            echo ""
+            echo "Options:"
+            echo "  --mode=A|B         Mode A: In-place injection, Mode B: Isolated staging"
+            echo "  --aapt2=<path>     Path to native aapt2 binary to inject"
+            echo "  --rollback         Revert project configuration from .termux_project_config.json"
+            echo "  -h, --help         Show this help message and exit"
+            exit 0
+            ;;
         --rollback)
             ROLLBACK=true
             shift

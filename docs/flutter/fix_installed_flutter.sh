@@ -1,4 +1,4 @@
-#!/data/user/0/com.tom.rv2ide/files/usr/bin/bash
+#!/data/data/com.tom.rv2ide/files/usr/bin/bash
 # ==============================================================================
 # Fix Installed Flutter SDK in Android Code Studio (RV2IDE)
 # Solves: /usr/bin/env: bad interpreter: No such file or directory
@@ -12,6 +12,45 @@ Green='\033[0;32m'
 Blue='\033[0;34m'
 Orange='\e[38;5;208m'
 Cyan='\033[0;36m'
+
+print_help() {
+  cat << EOF
+Flutter On-Device Patch for Android Code Studio
+Usage: $(basename "$0") [options]
+
+Options:
+  -h, --help           Show this help message and exit
+  -n, --dry-run        Inspect environment and target scripts without modifying files
+  -p, --prefix <path>  Override PREFIX directory (default: auto-detected)
+  -f, --flutter-root <path> Override FLUTTER_ROOT directory (default: auto-detected)
+EOF
+}
+
+DRY_RUN=false
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    -n|--dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    -p|--prefix)
+      PREFIX="$2"
+      shift 2
+      ;;
+    -f|--flutter-root)
+      FLUTTER_ROOT="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 # 1. Detect and resolve PREFIX
 if [ -z "${PREFIX:-}" ]; then
@@ -122,6 +161,13 @@ if [ ! -d "$FLUTTER_ROOT" ]; then
   print_err "Flutter root directory does not exist at: $FLUTTER_ROOT"
   print_err "Please verify that Flutter SDK is installed or specify FLUTTER_ROOT manually."
   exit 1
+fi
+
+if [ "$DRY_RUN" = "true" ]; then
+  print_info "[DRY-RUN] Verified FLUTTER_ROOT at: $FLUTTER_ROOT"
+  print_info "[DRY-RUN] Target bash interpreter: $TARGET_BASH"
+  print_info "[DRY-RUN] Dry-run enabled. Exiting without modifying files."
+  exit 0
 fi
 
 # 3. Step 1: Run termux-fix-shebang if available
