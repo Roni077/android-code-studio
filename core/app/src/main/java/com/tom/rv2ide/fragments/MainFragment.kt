@@ -511,13 +511,18 @@ class MainFragment : BaseFragment() {
   private fun isValidAndroidProject(dir: File): Boolean {
     if (!dir.isDirectory) return false
 
-    val gradleWrapper = File(dir, "gradle/wrapper/gradle-wrapper.properties")
-    if (!gradleWrapper.exists()) return false
+    // 1. Standard Android project: root wrapper & build script
+    val hasGradleWrapper = File(dir, "gradle/wrapper/gradle-wrapper.properties").exists()
+    val hasRootBuildGradle = File(dir, "build.gradle").exists() || File(dir, "build.gradle.kts").exists()
+    if (hasGradleWrapper && hasRootBuildGradle) return true
 
-    val buildGradle = File(dir, "build.gradle")
-    val buildGradleKts = File(dir, "build.gradle.kts")
+    // 2. Flutter project: pubspec.yaml at root or nested android/ gradle configuration
+    val hasPubspec = File(dir, "pubspec.yaml").exists()
+    val androidDir = File(dir, "android")
+    val hasNestedGradle = androidDir.isDirectory &&
+        (File(androidDir, "build.gradle").exists() || File(androidDir, "build.gradle.kts").exists())
 
-    return buildGradle.exists() || buildGradleKts.exists()
+    return hasPubspec || hasNestedGradle
   }
 
   private fun deleteProject(project: File, onDeleted: () -> Unit) {

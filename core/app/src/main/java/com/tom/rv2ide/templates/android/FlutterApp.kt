@@ -82,6 +82,11 @@ class FlutterApp : Template {
         // 1. Copy all template assets from assets/FlutterApp
         copyAssetFolderWithReplacements(context, ASSETS_BASE_PATH, projectRoot, replacements)
 
+        // 1.1 If Kotlin DSL requested, generate .gradle.kts files and remove Groovy .gradle files
+        if (options.useKts) {
+          setupKotlinDsl(projectRoot, pkg)
+        }
+
         // 2. Write Android MainActivity
         val mainActivityFile = File(projectRoot, "android/app/src/main/kotlin/$pkgPath/MainActivity.kt")
         mainActivityFile.parentFile?.mkdirs()
@@ -204,6 +209,7 @@ class FlutterApp : Template {
         lower.endsWith(".yml") ||
         lower.endsWith(".dart") ||
         lower.endsWith(".gradle") ||
+        lower.endsWith(".kts") ||
         lower.endsWith(".properties") ||
         lower.endsWith(".xml") ||
         lower.endsWith(".md") ||
@@ -212,6 +218,146 @@ class FlutterApp : Template {
         lower.endsWith("gitignore") ||
         lower.endsWith("gradlew") ||
         lower.endsWith("gradlew.bat")
+  }
+
+  private fun setupKotlinDsl(projectRoot: File, pkg: String) {
+    val androidDir = File(projectRoot, "android")
+    if (!androidDir.exists()) return
+
+    // 1. android/settings.gradle.kts
+    val settingsKts = File(androidDir, "settings.gradle.kts")
+    settingsKts.writeText(
+        """
+        pluginManagement {
+            val flutterSdkPath = run {
+                val properties = java.util.Properties()
+                file("local.properties").takeIf { it.exists() }?.inputStream()?.use { properties.load(it) }
+                val flutterSdk = properties.getProperty("flutter.sdk")
+                require(flutterSdk != null) { "flutter.sdk not set in local.properties" }
+                flutterSdk
+            }
+
+            includeBuild("${'$'}flutterSdkPath/packages/flutter_tools/gradle")
+
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+
+        plugins {
+            id("dev.flutter.flutter-plugin-loader") version "1.0.0"
+            id("com.android.application") version "8.1.0" apply false
+            id("org.jetbrains.kotlin.android") version "1.9.0" apply false
+        }
+
+        include(":app")
+        """.trimIndent() + "\n",
+        Charsets.UTF_8
+    )
+
+    // 2. android/build.gradle.kts
+    val rootBuildKts = File(androidDir, "build.gradle.kts")
+    rootBuildKts.writeText(
+        """
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+
+        val newBuildDir: org.gradle.api.file.Directory = rootProject.layout.buildDirectory.dir("../../build").get()
+        rootProject.layout.buildDirectory.value(newBuildDir)
+
+        subprojects {
+            val newSubprojectBuildDir: org.gradle.api.file.Directory = newBuildDir.dir(project.name)
+            project.layout.buildDirectory.value(newSubprojectBuildDir)
+        }
+        subprojects {
+            project.evaluationDependsOn(":app")
+        }
+
+        tasks.register<Delete>("clean") {
+            delete(rootProject.layout.buildDirectory)
+        }
+        """.trimIndent() + "\n",
+        Charsets.UTF_8
+    )
+
+    // 3. android/app/build.gradle.kts
+    val appDir = File(androidDir, "app")
+    val appBuildKts = File(appDir, "build.gradle.kts")
+    appBuildKts.writeText(
+        """
+        plugins {
+            id("com.android.application")
+            id("kotlin-android")
+            id("dev.flutter.flutter-gradle-plugin")
+        }
+
+        val localProperties = java.util.Properties().apply {
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.reader(Charsets.UTF_8).use { load(it) }
+            }
+        }
+
+        val flutterVersionCode = localProperties.getProperty("flutter.versionCode")?.toIntOrNull() ?: 1
+        val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
+
+        android {
+            namespace = "$pkg"
+            compileSdk = 36
+            ndkVersion = "29.0.14033849"
+
+            compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
+            }
+
+            kotlinOptions {
+                jvmTarget = "17"
+            }
+
+            sourceSets {
+                getByName("main").java.srcDirs("src/main/kotlin")
+            }
+
+            defaultConfig {
+                applicationId = "$pkg"
+                minSdk = 24
+                targetSdk = 36
+                versionCode = flutterVersionCode
+                versionName = flutterVersionName
+                ndk {
+                    abiFilters.add("arm64-v8a")
+                }
+            }
+
+            buildTypes {
+                release {
+                    isMinifyEnabled = false
+                    isShrinkResources = false
+                    signingConfig = signingConfigs.getByName("debug")
+                }
+            }
+        }
+
+        flutter {
+            source = "../.."
+        }
+
+        dependencies {}
+        """.trimIndent() + "\n",
+        Charsets.UTF_8
+    )
+
+    // Remove obsolete Groovy gradle files so there is no collision
+    File(androidDir, "settings.gradle").delete()
+    File(androidDir, "build.gradle").delete()
+    File(appDir, "build.gradle").delete()
   }
 
   companion object {

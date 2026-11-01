@@ -287,19 +287,32 @@ class INdk(
                                   extractFlashbar ->
                                 lifecycleScope.launch(Dispatchers.IO) {
                                   try {
+                                    val targetVersionDir = File(NDK_DIR, version)
+                                    if (!targetVersionDir.exists()) {
+                                      targetVersionDir.mkdirs()
+                                    }
+
                                     val installer = IPackageInstaller()
                                     val archiveFile = File(ACS_DIR, filename)
 
+                                    // Extract directly into the version directory with stripComponents = 1
                                     installer.extractXzArchive(
                                         archiveFile.absolutePath,
-                                        NDK_DIR.absolutePath,
+                                        targetVersionDir.absolutePath,
+                                        stripComponents = 1,
                                     )
+
+                                    normalizeNdkDir(targetVersionDir)
+
+                                    // Clean up downloaded archive to save ~1GB of disk space
+                                    if (archiveFile.exists()) {
+                                      archiveFile.delete()
+                                    }
 
                                     withContext(Dispatchers.Main) {
                                       extractFlashbar.dismiss()
                                       prefManager.putBoolean("ndk_installed", true)
                                       flashSuccess("Installation completed successfully!")
-                                      renameDir(NDK_DIR.absolutePath, "$version")
                                       updateNdkBuild(version)
                                       updateStatus()
                                     }
@@ -345,45 +358,37 @@ class INdk(
   }
 
   private fun updateNdkBuild(version: String) {
-    val build_script = File(NDK_DIR, "$version/ndk-build")
-    if (build_script.exists()) {
-      build_script.writeText(
-          """
-    #!/bin/sh
-    DIR=${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)
-    ${Environment.BIN_DIR}/bash "${'$'}DIR/build/ndk-build" "${'$'}@"
-            """
-              .trimIndent()
-      )
-      build_script.setExecutable(true)
+    val versionDir = File(NDK_DIR, version)
+    val buildScript = File(versionDir, "ndk-build")
+    val realBuild = File(versionDir, "build/ndk-build")
+    if (realBuild.exists()) {
+      realBuild.setExecutable(true, false)
     }
+    buildScript.writeText(
+        """
+        #!/data/data/com.tom.rv2ide/files/usr/bin/bash
+        DIR=${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)
+        ${Environment.BIN_DIR}/bash "${'$'}DIR/build/ndk-build" "${'$'}@"
+        """.trimIndent() + "\n"
+    )
+    buildScript.setExecutable(true, false)
   }
 
-  private fun renameDir(parentDir: String, newName: String = "ndk") {
-    val parent = File(parentDir)
+  private fun normalizeNdkDir(versionDir: File) {
+    if (!versionDir.exists() || !versionDir.isDirectory) return
+    val buildDir = File(versionDir, "build")
+    if (buildDir.exists() && buildDir.isDirectory) return
 
-    if (!parent.exists() || !parent.isDirectory) {
-      return
-    }
-
-    parent.listFiles()?.forEach { file ->
-      if (file.isDirectory && file.name.startsWith("android-ndk")) {
-        val newFile = File(parent, newName)
-
-        // Handle name conflicts by adding a number suffix
-        var finalNewFile = newFile
-        var counter = 1
-        while (finalNewFile.exists()) {
-          finalNewFile = File(parent, "$newName-$counter")
-          counter++
-        }
-
-        if (file.renameTo(finalNewFile)) {
-          println("Renamed: ${file.name} -> ${finalNewFile.name}")
-        } else {
-          println("Failed to rename: ${file.name}")
+    // If archive had an unexpected nesting level, flatten its child into versionDir
+    val nestedDir = versionDir.listFiles()?.firstOrNull { it.isDirectory && (File(it, "build").exists() || File(it, "ndk-build").exists()) }
+    if (nestedDir != null) {
+      nestedDir.listFiles()?.forEach { child ->
+        val dest = File(versionDir, child.name)
+        if (!dest.exists()) {
+          child.renameTo(dest)
         }
       }
+      nestedDir.deleteRecursively()
     }
   }
 

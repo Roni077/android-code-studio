@@ -28,6 +28,7 @@ import android.util.Log
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.FileProvider
+import com.tom.rv2ide.preferences.internal.GeneralPreferences
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.tom.rv2ide.resources.R
@@ -62,6 +63,10 @@ class TomIDEUpdater(private val context: Context) {
   private var progressText: TextView? = null
 
   fun checkForUpdates() {
+    if (!GeneralPreferences.checkAppUpdates) {
+      Log.d(TAG, "Automatic update checks are disabled (checkAppUpdates = false).")
+      return
+    }
     CoroutineScope(Dispatchers.IO).launch {
       try {
         val updateInfo = fetchUpdateInfo()

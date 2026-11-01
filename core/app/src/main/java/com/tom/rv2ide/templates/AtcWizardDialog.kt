@@ -245,7 +245,7 @@ class AtcWizardDialog : BottomSheetDialogFragment() {
       binding.nativeLanguageInputLayout.visibility = if (isNative) View.VISIBLE else View.GONE
       binding.ndkVersionButton.visibility = if (isNative) View.VISIBLE else View.GONE
       binding.ndkVersionButton.text = "NDK: ${Options.OPT_SELECTED_NDK_VERSION ?: "Auto"}"
-      binding.useKtsSwitch.visibility = if (isFlutter) View.GONE else View.VISIBLE
+      binding.useKtsSwitch.visibility = View.VISIBLE
 
       SheetTransitions.slide(
           binding.wizardContainer,

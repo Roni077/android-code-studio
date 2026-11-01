@@ -46,6 +46,7 @@ class GeneralPreferencesScreen(
     addPreference(InterfaceConfig())
     addPreference(ProjectConfig())
     addPreference(TerminalConfig())
+    addPreference(UpdatesConfig())
   }
 }
 
@@ -302,6 +303,39 @@ class UseSytemShell(
 
   override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
     GeneralPreferences.useSystemShell = newValue as Boolean? ?: GeneralPreferences.useSystemShell
+    return true
+  }
+}
+
+@Parcelize
+class UpdatesConfig(
+    override val key: String = "idepref_general_updates",
+    override val title: Int = string.title_check_app_updates,
+    override val children: List<IPreference> = mutableListOf(),
+) : IPreferenceGroup() {
+
+  init {
+    addPreference(CheckAppUpdates())
+  }
+}
+
+@Parcelize
+class CheckAppUpdates(
+    override val key: String = GeneralPreferences.CHECK_APP_UPDATES,
+    override val title: Int = string.title_check_app_updates,
+    override val summary: Int? = string.msg_check_app_updates,
+    override val icon: Int? = MainR.drawable.ic_update,
+) : SwitchPreference() {
+
+  override fun onCreatePreference(context: Context): Preference {
+    val pref = super.onCreatePreference(context) as androidx.preference.SwitchPreference
+    pref.isChecked = GeneralPreferences.checkAppUpdates
+    return pref
+  }
+
+  override fun onPreferenceChanged(preference: Preference, newValue: Any?): Boolean {
+    GeneralPreferences.checkAppUpdates =
+        newValue as Boolean? ?: GeneralPreferences.checkAppUpdates
     return true
   }
 }

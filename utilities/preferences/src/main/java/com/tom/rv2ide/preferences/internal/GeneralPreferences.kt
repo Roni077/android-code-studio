@@ -33,6 +33,7 @@ object GeneralPreferences {
   const val SNOWFALL_OVERLAY = "idepref_general_snowfall"
   const val IDE_LOGS_ENABLED = "idepref_ide_logs_enabled"
   const val TERMINAL_USE_SYSTEM_SHELL = "idepref_general_terminalShell"
+  const val CHECK_APP_UPDATES = "idepref_general_check_app_updates"
   const val LAST_OPENED_PROJECT = "ide_last_project"
 
   const val NO_OPENED_PROJECT = "<NO_OPENED_PROJECT>"
@@ -99,6 +100,12 @@ object GeneralPreferences {
     get() = prefManager.getBoolean(TERMINAL_USE_SYSTEM_SHELL, false)
     set(value) {
       prefManager.putBoolean(TERMINAL_USE_SYSTEM_SHELL, value)
+    }
+
+  var checkAppUpdates: Boolean
+    get() = prefManager.getBoolean(CHECK_APP_UPDATES, false)
+    set(value) {
+      prefManager.putBoolean(CHECK_APP_UPDATES, value)
     }
 
   var lastOpenedProject: String

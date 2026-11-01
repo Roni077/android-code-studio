@@ -7,6 +7,8 @@
   <string name="cfg_installed_cmake_version">Installed CMake Version: %s</string>
 
   <!-- General messages -->
+  <string name="title_check_app_updates">Check for App Updates</string>
+  <string name="msg_check_app_updates">Automatically check for new app versions on launch</string>
   <string name="updater_no_updates_available">No updates available</string>
   <string name="updater_check_failed">Failed to check for updates</string>
   <string name="updater_changelog_failed">Failed to load changelog</string>

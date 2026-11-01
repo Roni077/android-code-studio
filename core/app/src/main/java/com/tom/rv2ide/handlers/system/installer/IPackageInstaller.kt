@@ -31,7 +31,7 @@ class IPackageInstaller {
   }
 
   @Throws(IOException::class, IllegalArgumentException::class)
-  fun extractXzArchive(xzFilePath: String, outputDir: String) {
+  fun extractXzArchive(xzFilePath: String, outputDir: String, stripComponents: Int = 0) {
     val xzFile = File(xzFilePath)
     val outputDirectory = File(outputDir).canonicalFile
 
@@ -67,16 +67,20 @@ class IPackageInstaller {
       throw IOException("tar binary is not executable: ${tarBinary.absolutePath}")
     }
 
-    Log.d(TAG, "Starting tar extraction...")
+    Log.d(TAG, "Starting tar extraction (stripComponents=$stripComponents)...")
 
-    val processBuilder =
-        ProcessBuilder(
-            tarBinary.absolutePath,
-            "-xvf", // verbose to see what's happening
-            xzFile.absolutePath,
-            "-C",
-            outputDirectory.absolutePath,
-        )
+    val tarArgs = mutableListOf(
+        tarBinary.absolutePath,
+        "-xf",
+        xzFile.absolutePath,
+        "-C",
+        outputDirectory.absolutePath,
+    )
+    if (stripComponents > 0) {
+      tarArgs.add("--strip-components=$stripComponents")
+    }
+
+    val processBuilder = ProcessBuilder(tarArgs)
 
     // Set up environment for the process
     val env = processBuilder.environment()
@@ -88,29 +92,16 @@ class IPackageInstaller {
 
     val process = processBuilder.start()
 
-    val outputLines = mutableListOf<String>()
     val errorLines = mutableListOf<String>()
-
-    // Capture stdout
-    val outputReader = Thread {
-      try {
-        process.inputStream.bufferedReader().useLines { lines ->
-          lines.forEach { line ->
-            outputLines.add(line)
-            Log.d(TAG, "tar stdout: $line")
-          }
-        }
-      } catch (e: Exception) {
-        Log.e(TAG, "Error reading stdout", e)
-      }
-    }
 
     // Capture stderr
     val errorReader = Thread {
       try {
         process.errorStream.bufferedReader().useLines { lines ->
           lines.forEach { line ->
-            errorLines.add(line)
+            if (errorLines.size < 50) {
+              errorLines.add(line)
+            }
             Log.e(TAG, "tar stderr: $line")
           }
         }
@@ -119,25 +110,20 @@ class IPackageInstaller {
       }
     }
 
-    outputReader.start()
     errorReader.start()
 
     val exitCode = process.waitFor()
-
-    outputReader.join(5000) // Wait max 5 seconds
-    errorReader.join(5000)
+    try {
+      errorReader.join(10000)
+    } catch (_: InterruptedException) {}
 
     // List what's in the output directory
     val extractedFiles = outputDirectory.listFiles()
     Log.d(TAG, "Files in output directory: ${extractedFiles?.size ?: 0}")
-    extractedFiles?.forEach { file ->
-      Log.d(TAG, "  - ${file.name} (${if (file.isDirectory) "dir" else "file"})")
-    }
 
     if (exitCode != 0) {
       val errorMsg =
           "tar extraction failed with exit code: $exitCode\n" +
-              "stdout: ${outputLines.joinToString("\n")}\n" +
               "stderr: ${errorLines.joinToString("\n")}"
       Log.e(TAG, errorMsg)
       throw IOException(errorMsg)
@@ -150,9 +136,9 @@ class IPackageInstaller {
     Log.d(TAG, "Extraction successful!")
   }
 
-  fun extractXzArchiveSimple(xzFilePath: String, outputDir: String): Boolean {
+  fun extractXzArchiveSimple(xzFilePath: String, outputDir: String, stripComponents: Int = 0): Boolean {
     return try {
-      extractXzArchive(xzFilePath, outputDir)
+      extractXzArchive(xzFilePath, outputDir, stripComponents)
       true
     } catch (e: Exception) {
       Log.e(TAG, "Extraction failed", e)
