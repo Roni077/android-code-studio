@@ -25,6 +25,7 @@ import com.termux.terminal.TerminalSession
 import com.tom.rv2ide.app.configuration.CpuArch
 import com.tom.rv2ide.app.configuration.IDEBuildConfigProvider
 import com.tom.rv2ide.managers.ToolsManager
+import com.tom.rv2ide.utils.Environment
 import java.io.File
 import java.io.FileOutputStream
 import org.slf4j.LoggerFactory
@@ -139,6 +140,8 @@ private constructor(
 
   override fun finish() {
     super.finish()
+    val logDir = File(Environment.HOME, "setup_logs")
+    log.info("IDE setup session finished. Detailed logs stored in: {}", logDir.absolutePath)
     // Delete the temporary script files once the session is finished
     val error = FileUtils.deleteFile("idesetupScript", script.absolutePath, true)
     if (error != null) {

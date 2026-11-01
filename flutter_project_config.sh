@@ -203,6 +203,41 @@ if [ -z "${HOME:-}" ]; then
 else
     HOME_PATH="$HOME"
 fi
+
+# Dedicated setup log folder in home directory ($HOME/setup_logs)
+SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME_PATH/setup_logs}"
+mkdir -p "$SETUP_LOG_DIR" 2>/dev/null || true
+SETUP_LOG="${SETUP_LOG:-$SETUP_LOG_DIR/flutter_project_config.log}"
+export SETUP_LOG_DIR
+export SETUP_LOG
+
+LATEST_LOG="$SETUP_LOG_DIR/latest_setup.log"
+LEGACY_LOG="$HOME_PATH/setup_output.log"
+
+strip_ansi() {
+    printf "%s" "$1" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g'
+}
+
+write_setup_log() {
+    local lvl="$1"
+    shift
+    local raw_msg="$*"
+    local clean_msg
+    clean_msg=$(strip_ansi "$raw_msg")
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
+    local log_dir
+    log_dir="$(dirname "$SETUP_LOG")"
+    [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+    if [ "$SETUP_LOG" != "$LATEST_LOG" ]; then
+        printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LATEST_LOG" 2>/dev/null || true
+    fi
+    if [ "$SETUP_LOG" != "$LEGACY_LOG" ]; then
+        printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LEGACY_LOG" 2>/dev/null || true
+    fi
+}
+
 MODE_A_AAPT2="$PREFIX_PATH/bin/aapt2"
 MODE_B_AAPT2="$HOME_PATH/Android/Sdk/build-tools/35.0.0/aapt2"
 SYSTEM_BT_AAPT2="$PREFIX_PATH/opt/android-sdk/build-tools/35.0.0/aapt2"

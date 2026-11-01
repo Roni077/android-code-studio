@@ -18,33 +18,6 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-SETUP_LOG="${SETUP_LOG:-$HOME/setup_output.log}"
-export SETUP_LOG
-
-write_setup_log() {
-  local lvl="$1"
-  shift
-  local raw_msg="$*"
-  local clean_msg
-  clean_msg=$(printf "%s" "$raw_msg" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')
-  local ts
-  ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
-  local log_dir
-  log_dir="$(dirname "$SETUP_LOG")"
-  [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
-  printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
-}
-
-log_info()    { echo -e "${BLUE}[INFO]${NC} $*"; write_setup_log "INFO" "$*"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; write_setup_log "SUCCESS" "$*"; }
-log_warn()    { echo -e "${YELLOW}[WARNING]${NC} $*"; write_setup_log "WARN" "$*"; }
-log_err()     { echo -e "${RED}[ERROR]${NC} $*" >&2; write_setup_log "ERROR" "$*"; }
-log_section() {
-  echo ""
-  echo -e "${CYAN}${BOLD}=== $* ===${NC}"
-  write_setup_log "SECTION" "=== $* ==="
-}
-
 # --- 1. Environment Auto-Detection ---
 if [ -z "${PREFIX:-}" ]; then
   if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
@@ -76,6 +49,58 @@ export ANDROID_HOME="$ANDROID_SDK"
 export ANDROID_SDK_ROOT="$ANDROID_SDK"
 export TMPDIR="${TMPDIR:-$PREFIX/tmp}"
 mkdir -p "$TMPDIR"
+
+# Dedicated setup log folder in home directory ($HOME/setup_logs)
+SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME/setup_logs}"
+mkdir -p "$SETUP_LOG_DIR" 2>/dev/null || true
+SETUP_LOG="${SETUP_LOG:-$SETUP_LOG_DIR/flutter_install_verify.log}"
+export SETUP_LOG_DIR
+export SETUP_LOG
+
+LATEST_LOG="$SETUP_LOG_DIR/latest_setup.log"
+LEGACY_LOG="$HOME/setup_output.log"
+
+# Rotate log file if > 5 MB
+if [ -f "$SETUP_LOG" ]; then
+  log_bytes=$(wc -c < "$SETUP_LOG" 2>/dev/null || echo 0)
+  if [ "$log_bytes" -gt 5242880 ]; then
+    mv -f "$SETUP_LOG" "${SETUP_LOG}.old" 2>/dev/null || true
+  fi
+fi
+
+strip_ansi() {
+  printf "%s" "$1" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g'
+}
+
+write_setup_log() {
+  local lvl="$1"
+  shift
+  local raw_msg="$*"
+  local clean_msg
+  clean_msg=$(strip_ansi "$raw_msg")
+  local ts
+  ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
+  local log_dir
+  log_dir="$(dirname "$SETUP_LOG")"
+  [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
+  printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+  if [ "$SETUP_LOG" != "$LATEST_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LATEST_LOG" 2>/dev/null || true
+  fi
+  if [ "$SETUP_LOG" != "$LEGACY_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LEGACY_LOG" 2>/dev/null || true
+  fi
+}
+
+log_info()    { echo -e "${BLUE}[INFO]${NC} $*"; write_setup_log "INFO" "$*"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; write_setup_log "SUCCESS" "$*"; }
+log_warn()    { echo -e "${YELLOW}[WARNING]${NC} $*"; write_setup_log "WARN" "$*"; }
+log_err()     { echo -e "${RED}[ERROR]${NC} $*" >&2; write_setup_log "ERROR" "$*"; }
+log_section() {
+  echo ""
+  echo -e "${CYAN}${BOLD}=== $* ===${NC}"
+  write_setup_log "SECTION" "=== $* ==="
+}
 
 # Configure Java Home
 JAVA_HOME=$(find "$PREFIX/lib/jvm" -maxdepth 1 -type d -name 'java-*-openjdk' 2>/dev/null | sort -V | tail -1)
@@ -280,7 +305,7 @@ if [ -f "$POST_INSTALL_SCRIPT" ]; then
   sed -i "s|/data/data/com\.termux/files/usr|$PREFIX|g" "$POST_INSTALL_SCRIPT" 2>/dev/null || true
 
   log_info "Running upstream post_install.sh (executing 17-step configuration engine)..."
-  bash "$POST_INSTALL_SCRIPT"
+  SETUP_LOG="$SETUP_LOG_DIR/post_install.log" bash "$POST_INSTALL_SCRIPT"
   POST_INSTALL_RES=$?
   if [ "$POST_INSTALL_RES" -eq 0 ]; then
     log_success "Upstream post_install.sh completed successfully."
@@ -298,7 +323,7 @@ if [ -f "$POST_INSTALL_SCRIPT" ]; then
   done
   if [ "$NDK_FOUND" = "false" ]; then
     log_info "Running upstream post_install.sh --provision-ndk (provisioning pinned HomuHomu833 r30 NDK)..."
-    bash "$POST_INSTALL_SCRIPT" --provision-ndk || {
+    SETUP_LOG="$SETUP_LOG_DIR/post_install.log" bash "$POST_INSTALL_SCRIPT" --provision-ndk || {
       log_warn "post_install.sh --provision-ndk notice. Companion NDK fallback available."
     }
   else
@@ -562,15 +587,20 @@ fi
 log_section "Summary"
 if [ "$FAIL_COUNT" -eq 0 ]; then
   log_success "Flutter toolchain is properly installed and verified according to GeneralKaos666/flutter-for-termux specifications!"
+  log_info "Setup log saved to: $SETUP_LOG"
+  log_info "All setup logs in : $SETUP_LOG_DIR"
   write_setup_log "SUMMARY" "================================================================================"
   write_setup_log "SUMMARY" "SETUP_STATUS=SUCCESS"
+  write_setup_log "SUMMARY" "LOG_FILE: $SETUP_LOG"
   write_setup_log "SUMMARY" "COMPLETED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'now')"
   write_setup_log "SUMMARY" "================================================================================"
   exit 0
 else
   log_err "Encountered $FAIL_COUNT check failure(s). Please review the logs above."
+  log_info "Inspect log at: $SETUP_LOG"
   write_setup_log "SUMMARY" "================================================================================"
   write_setup_log "SUMMARY" "SETUP_STATUS=FAILED (FailCount: $FAIL_COUNT)"
+  write_setup_log "SUMMARY" "LOG_FILE: $SETUP_LOG"
   write_setup_log "SUMMARY" "FAILED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'now')"
   write_setup_log "SUMMARY" "================================================================================"
   exit 1

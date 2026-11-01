@@ -13,21 +13,75 @@ Blue='\033[0;34m'
 Orange='\e[38;5;208m'
 Cyan='\033[0;36m'
 
-SETUP_LOG="${SETUP_LOG:-$HOME/setup_output.log}"
+# 1. Detect and resolve PREFIX
+if [ -z "${PREFIX:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/data/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.termux/files/usr" ]; then
+    PREFIX="/data/data/com.termux/files/usr"
+  elif [ -n "${HOME:-}" ] && [ -d "$HOME/../usr" ]; then
+    PREFIX="$(cd "$HOME/../usr" && pwd)"
+  else
+    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
+  fi
+fi
+export PREFIX
+
+if [ -z "${HOME:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/user/0/com.tom.rv2ide/files/home"
+  elif [ -d "/data/data/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/data/com.tom.rv2ide/files/home"
+  elif [ -d "/data/data/com.termux/files/home" ]; then
+    HOME="/data/data/com.termux/files/home"
+  else
+    HOME="$(dirname "$PREFIX")/home"
+  fi
+fi
+export HOME
+
+# Dedicated setup log folder in home directory ($HOME/setup_logs)
+SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME/setup_logs}"
+mkdir -p "$SETUP_LOG_DIR" 2>/dev/null || true
+SETUP_LOG="${SETUP_LOG:-$SETUP_LOG_DIR/flutter_fix.log}"
+export SETUP_LOG_DIR
 export SETUP_LOG
+
+LATEST_LOG="$SETUP_LOG_DIR/latest_setup.log"
+LEGACY_LOG="$HOME/setup_output.log"
+
+# Rotate log file if > 5 MB
+if [ -f "$SETUP_LOG" ]; then
+  log_bytes=$(wc -c < "$SETUP_LOG" 2>/dev/null || echo 0)
+  if [ "$log_bytes" -gt 5242880 ]; then
+    mv -f "$SETUP_LOG" "${SETUP_LOG}.old" 2>/dev/null || true
+  fi
+fi
+
+strip_ansi() {
+  printf "%s" "$1" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g'
+}
 
 write_setup_log() {
   local lvl="$1"
   shift
   local raw_msg="$*"
   local clean_msg
-  clean_msg=$(printf "%s" "$raw_msg" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+  clean_msg=$(strip_ansi "$raw_msg")
   local ts
   ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
   local log_dir
   log_dir="$(dirname "$SETUP_LOG")"
   [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
   printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+  if [ "$SETUP_LOG" != "$LATEST_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LATEST_LOG" 2>/dev/null || true
+  fi
+  if [ "$SETUP_LOG" != "$LEGACY_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LEGACY_LOG" 2>/dev/null || true
+  fi
 }
 
 print_info() { printf "${Blue}[ INFO ] %s${Color_Off}\n" "$1"; write_setup_log "INFO" "$1"; }
@@ -41,19 +95,6 @@ printf "${Cyan}   Flutter On-Device Patch for Android Code Studio  ${Color_Off}\
 printf "${Cyan}====================================================${Color_Off}\n"
 echo ""
 
-# 1. Detect and resolve PREFIX
-if [ -z "$PREFIX" ]; then
-  if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
-    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
-  elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
-    PREFIX="/data/data/com.tom.rv2ide/files/usr"
-  elif [ -n "$HOME" ] && [ -d "$HOME/../usr" ]; then
-    PREFIX="$(cd "$HOME/../usr" && pwd)"
-  else
-    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
-  fi
-fi
-export PREFIX
 print_info "Using PREFIX: $PREFIX"
 
 TARGET_BASH="$PREFIX/bin/bash"
@@ -193,6 +234,7 @@ write_setup_log "SUMMARY" "COMPLETED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null
 write_setup_log "SUMMARY" "================================================================================"
 print_success "===================================================="
 print_success " Flutter SDK patch completed successfully!"
+print_success " Log saved to: $SETUP_LOG"
 print_success ""
 print_success " When building an APK, remember to use --no-tree-shake-icons:"
 print_success "   flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons"

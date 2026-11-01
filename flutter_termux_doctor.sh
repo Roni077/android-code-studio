@@ -15,6 +15,18 @@ if [ -z "${PREFIX:-}" ]; then
         PREFIX="/data/data/com.tom.rv2ide/files/usr"
     fi
 fi
+
+if [ -z "${HOME:-}" ]; then
+    if [ -d "/data/user/0/com.tom.rv2ide/files/home" ]; then
+        HOME="/data/user/0/com.tom.rv2ide/files/home"
+    elif [ -d "/data/data/com.tom.rv2ide/files/home" ]; then
+        HOME="/data/data/com.tom.rv2ide/files/home"
+    elif [ -d "/data/data/com.termux/files/home" ]; then
+        HOME="/data/data/com.termux/files/home"
+    else
+        HOME="$(dirname "$PREFIX")/home"
+    fi
+fi
 USER_NAME="$(whoami 2>/dev/null || echo "u0_a0")"
 
 # Colors
@@ -196,24 +208,48 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}[6] Setup Output Log & Provisioning History:${NC}"
-SETUP_LOG_FILE="${SETUP_LOG:-$HOME/setup_output.log}"
-if [ -f "$SETUP_LOG_FILE" ]; then
+echo -e "${BLUE}[6] Setup Output Logs & Provisioning History:${NC}"
+SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME/setup_logs}"
+found_logs=0
+if [ -d "$SETUP_LOG_DIR" ]; then
+    echo "  Logs Directory  : $SETUP_LOG_DIR"
+    for log_file in "$SETUP_LOG_DIR"/*.log; do
+        [ ! -f "$log_file" ] && continue
+        found_logs=1
+        base_name=$(basename "$log_file")
+        log_size=$(wc -c < "$log_file" 2>/dev/null || echo "0")
+        last_mod=$(date -r "$log_file" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "----")
+        last_status=$(grep -E "(SETUP_STATUS=|FLUTTER_SETUP_STATUS=|POST_INSTALL_STATUS=|FLUTTER_PATCH_STATUS=)" "$log_file" 2>/dev/null | tail -n 1 || echo "")
+        status_disp="${YELLOW}UNKNOWN${NC}"
+        if echo "$last_status" | grep -q "SUCCESS"; then
+            status_disp="${GREEN}SUCCESS${NC}"
+        elif [ -n "$last_status" ]; then
+            status_disp="${RED}FAILED${NC}"
+        fi
+        printf "    %-26s : %7s bytes  [%s]  %b\n" "$base_name" "$log_size" "$last_mod" "$status_disp"
+        if echo "$last_status" | grep -qv "SUCCESS" && [ -n "$last_status" ]; then
+            last_err=$(grep -E "\[ERROR\]|FATAL|Error:" "$log_file" 2>/dev/null | tail -n 1 || echo "")
+            [ -n "$last_err" ] && echo -e "      ${RED}Last Error: $last_err${NC}"
+        fi
+    done
+    if [ "$found_logs" -eq 0 ]; then
+        echo -e "  ${YELLOW}No logs found in $SETUP_LOG_DIR${NC}"
+    else
+        echo "  Inspect Command : tail -n 50 $SETUP_LOG_DIR/<log_name>"
+    fi
+elif [ -f "${SETUP_LOG:-$HOME/setup_output.log}" ]; then
+    SETUP_LOG_FILE="${SETUP_LOG:-$HOME/setup_output.log}"
     log_size=$(wc -c < "$SETUP_LOG_FILE" 2>/dev/null || echo "0")
     echo "  Log Path        : $SETUP_LOG_FILE ($log_size bytes)"
-    last_session=$(grep "SETUP SESSION STARTED" "$SETUP_LOG_FILE" 2>/dev/null | tail -n 1 || echo "")
-    [ -n "$last_session" ] && echo "  Last Session    : $last_session"
-    last_status=$(grep -E "(SETUP_STATUS=|FLUTTER_SETUP_STATUS=|POST_INSTALL_STATUS=)" "$SETUP_LOG_FILE" 2>/dev/null | tail -n 1 || echo "")
+    last_status=$(grep -E "(SETUP_STATUS=|FLUTTER_SETUP_STATUS=|POST_INSTALL_STATUS=|FLUTTER_PATCH_STATUS=)" "$SETUP_LOG_FILE" 2>/dev/null | tail -n 1 || echo "")
     if echo "$last_status" | grep -q "SUCCESS"; then
         echo -e "  Setup Status    : ${GREEN}$last_status${NC}"
     elif [ -n "$last_status" ]; then
         echo -e "  Setup Status    : ${RED}$last_status${NC}"
-    else
-        echo -e "  Setup Status    : ${YELLOW}IN_PROGRESS or UNKNOWN${NC}"
     fi
-    echo "  Inspect Log     : cat $SETUP_LOG_FILE (or tail -n 50 $SETUP_LOG_FILE)"
+    echo "  Inspect Log     : tail -n 50 $SETUP_LOG_FILE"
 else
-    echo -e "  Log Path        : ${YELLOW}NOT FOUND ($SETUP_LOG_FILE)${NC}"
+    echo -e "  Log Directory   : ${YELLOW}NOT FOUND ($SETUP_LOG_DIR)${NC}"
 fi
 echo ""
 echo -e "${CYAN}======================================================${NC}"

@@ -14,9 +14,40 @@ Blue='\033[0;34m'
 Orange="\e[38;5;208m"
 Cyan="\033[0;36m"
 
-# Unified setup debug logging ($HOME/setup_output.log)
-SETUP_LOG="${SETUP_LOG:-$HOME/setup_output.log}"
+# Environment auto-detection
+if [ -z "${PREFIX:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/data/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.termux/files/usr" ]; then
+    PREFIX="/data/data/com.termux/files/usr"
+  else
+    PREFIX="/data/data/com.tom.rv2ide/files/usr"
+  fi
+fi
+
+if [ -z "${HOME:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/user/0/com.tom.rv2ide/files/home"
+  elif [ -d "/data/data/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/data/com.tom.rv2ide/files/home"
+  else
+    HOME="$(dirname "$PREFIX")/home"
+  fi
+fi
+ANDROID_SDK="${ANDROID_SDK:-$HOME/android-sdk}"
+FLUTTER_ROOT="${FLUTTER_ROOT:-$PREFIX/opt/flutter}"
+
+# Dedicated setup log folder in home directory ($HOME/setup_logs)
+SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME/setup_logs}"
+mkdir -p "$SETUP_LOG_DIR" 2>/dev/null || true
+SETUP_LOG="${SETUP_LOG:-$SETUP_LOG_DIR/fluttersetup.log}"
+export SETUP_LOG_DIR
 export SETUP_LOG
+
+LATEST_LOG="$SETUP_LOG_DIR/latest_setup.log"
+LEGACY_LOG="$HOME/setup_output.log"
 
 # Rotate log file if > 5 MB
 if [ -f "$SETUP_LOG" ]; then
@@ -42,6 +73,12 @@ write_setup_log() {
   log_dir="$(dirname "$SETUP_LOG")"
   [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
   printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+  if [ "$SETUP_LOG" != "$LATEST_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LATEST_LOG" 2>/dev/null || true
+  fi
+  if [ "$SETUP_LOG" != "$LEGACY_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LEGACY_LOG" 2>/dev/null || true
+  fi
 }
 
 print_info() {
@@ -70,31 +107,6 @@ abort_script() {
   write_setup_log "SUMMARY" "FLUTTER_SETUP_STATUS=FAILED (Error: $1)"
   exit 1
 }
-
-# Environment defaults
-if [ -z "${PREFIX:-}" ]; then
-  if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
-    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
-  elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
-    PREFIX="/data/data/com.tom.rv2ide/files/usr"
-  elif [ -d "/data/data/com.termux/files/usr" ]; then
-    PREFIX="/data/data/com.termux/files/usr"
-  else
-    PREFIX="/data/data/com.tom.rv2ide/files/usr"
-  fi
-fi
-
-if [ -z "${HOME:-}" ]; then
-  if [ -d "/data/user/0/com.tom.rv2ide/files/home" ]; then
-    HOME="/data/user/0/com.tom.rv2ide/files/home"
-  elif [ -d "/data/data/com.tom.rv2ide/files/home" ]; then
-    HOME="/data/data/com.tom.rv2ide/files/home"
-  else
-    HOME="$(dirname "$PREFIX")/home"
-  fi
-fi
-ANDROID_SDK="${ANDROID_SDK:-$HOME/android-sdk}"
-FLUTTER_ROOT="${FLUTTER_ROOT:-$PREFIX/opt/flutter}"
 
 assume_yes=false
 verbose=false
@@ -453,15 +465,15 @@ if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
   sed -i "s|/data/data/com\.termux/files/usr|$PREFIX|g" "$PREFIX/share/flutter/post_install.sh" 2>/dev/null || true
 
   print_info "Running upstream post_install.sh (17-step post-installation engine)..."
-  write_setup_log "ENGINE" "Executing upstream post_install.sh engine"
-  bash "$PREFIX/share/flutter/post_install.sh" >> "$SETUP_LOG" 2>&1 || print_warn "post_install.sh exited with warnings; continuing..."
+  write_setup_log "ENGINE" "Executing upstream post_install.sh engine (log: $SETUP_LOG_DIR/post_install.log)"
+  SETUP_LOG="$SETUP_LOG_DIR/post_install.log" bash "$PREFIX/share/flutter/post_install.sh" >> "$SETUP_LOG_DIR/post_install.log" 2>&1 || print_warn "post_install.sh exited with warnings; continuing..."
 
   # Upstream install.sh alignment: provision HomuHomu833 r30 NDK via post_install.sh
   if [ "$with_ndk" = "true" ] && [ "$requested_ndk_version" = "30.0.14206865" -o -z "$requested_ndk_version" ]; then
     if [ ! -d "$ANDROID_SDK/ndk/30.0.14206865" ] && [ ! -d "$ANDROID_SDK/ndk/29.0.14033849" ]; then
       print_info "Provisioning pinned HomuHomu833 r30 NDK via post_install.sh --provision-ndk..."
-      write_setup_log "ENGINE" "Running post_install.sh --provision-ndk"
-      bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk >> "$SETUP_LOG" 2>&1 || print_warn "post_install.sh --provision-ndk exited with warnings; companion provisioner will handle."
+      write_setup_log "ENGINE" "Running post_install.sh --provision-ndk (log: $SETUP_LOG_DIR/post_install.log)"
+      SETUP_LOG="$SETUP_LOG_DIR/post_install.log" bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk >> "$SETUP_LOG_DIR/post_install.log" 2>&1 || print_warn "post_install.sh --provision-ndk exited with warnings; companion provisioner will handle."
     fi
   fi
 fi
@@ -835,8 +847,9 @@ write_setup_log "SUMMARY" "=====================================================
 echo ""
 print_success "=========================================="
 print_success " Flutter SDK setup complete!"
-print_success " Flutter: $FLUTTER_ROOT/bin/flutter"
-print_success " Dart:    $FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+print_success " Flutter:   $FLUTTER_ROOT/bin/flutter"
+print_success " Dart:      $FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
 print_success " Setup log: $SETUP_LOG"
+print_success " All logs:  $SETUP_LOG_DIR"
 print_success "=========================================="
 echo ""

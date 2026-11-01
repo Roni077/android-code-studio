@@ -24,6 +24,18 @@ if [ -z "${PREFIX:-}" ]; then
     PREFIX="/data/data/com.tom.rv2ide/files/usr"
   fi
 fi
+
+if [ -z "${HOME:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/user/0/com.tom.rv2ide/files/home"
+  elif [ -d "/data/data/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/data/com.tom.rv2ide/files/home"
+  elif [ -d "/data/data/com.termux/files/home" ]; then
+    HOME="/data/data/com.termux/files/home"
+  else
+    HOME="$(dirname "$PREFIX")/home"
+  fi
+fi
 SYSROOT="${SYSROOT:-$PREFIX}"
 arch=$(uname -m)
 install_dir=$HOME
@@ -41,9 +53,15 @@ ndk_version="0"
 ndk=false
 with_flutter=false
 
-# Unified setup debug logging ($HOME/setup_output.log)
-SETUP_LOG="${SETUP_LOG:-$HOME/setup_output.log}"
+# Dedicated setup log folder in home directory ($HOME/setup_logs)
+SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME/setup_logs}"
+mkdir -p "$SETUP_LOG_DIR" 2>/dev/null || true
+SETUP_LOG="${SETUP_LOG:-$SETUP_LOG_DIR/idesetup.log}"
+export SETUP_LOG_DIR
 export SETUP_LOG
+
+LATEST_LOG="$SETUP_LOG_DIR/latest_setup.log"
+LEGACY_LOG="$HOME/setup_output.log"
 
 # Rotate log file if > 5 MB
 if [ -f "$SETUP_LOG" ]; then
@@ -69,6 +87,12 @@ write_setup_log() {
   log_dir="$(dirname "$SETUP_LOG")"
   [ ! -d "$log_dir" ] && mkdir -p "$log_dir" 2>/dev/null || true
   printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$SETUP_LOG" 2>/dev/null || true
+  if [ "$SETUP_LOG" != "$LATEST_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LATEST_LOG" 2>/dev/null || true
+  fi
+  if [ "$SETUP_LOG" != "$LEGACY_LOG" ]; then
+    printf "[%s] [%s] %s\n" "$ts" "$lvl" "$clean_msg" >> "$LEGACY_LOG" 2>/dev/null || true
+  fi
 }
 
 print_info() {
@@ -998,6 +1022,7 @@ if [ "$with_flutter" = "true" ]; then
     flutter_args+=("-wn")
   fi
   flutter_exit=0
+  SETUP_LOG="$SETUP_LOG_DIR/fluttersetup.log"
   if [ -f "$dir/fluttersetup.sh" ]; then
     bash "$dir/fluttersetup.sh" "${flutter_args[@]}" || flutter_exit=$?
   elif [ -f "$PREFIX/bin/fluttersetup.sh" ]; then
@@ -1020,4 +1045,6 @@ write_setup_log "SUMMARY" "LOG_FILE: $SETUP_LOG"
 write_setup_log "SUMMARY" "COMPLETED_AT: $(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'now')"
 write_setup_log "SUMMARY" "================================================================================"
 
-print_success "All setup operations completed successfully! Detailed log saved to: $SETUP_LOG"
+print_success "All setup operations completed successfully!"
+print_success "Detailed setup log: $SETUP_LOG"
+print_success "All logs saved in : $SETUP_LOG_DIR"
