@@ -28,7 +28,17 @@ echo "=========================================="
 write_setup_log "POST_INSTALL" "Flutter Termux Post-Install Configuration started"
 
 # Path definitions
-PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+if [ -z "${PREFIX:-}" ]; then
+	if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
+		PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
+	elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
+		PREFIX="/data/data/com.tom.rv2ide/files/usr"
+	elif [ -d "/data/data/com.termux/files/usr" ]; then
+		PREFIX="/data/data/com.termux/files/usr"
+	else
+		PREFIX="/data/data/com.tom.rv2ide/files/usr"
+	fi
+fi
 FLUTTER_ROOT="${FLUTTER_ROOT:-$PREFIX/opt/flutter}"
 ANDROID_SDK="${ANDROID_SDK:-$PREFIX/opt/android-sdk}"
 DART_SDK="${DART_SDK:-$FLUTTER_ROOT/bin/cache/dart-sdk}"

@@ -287,6 +287,23 @@ if [ -f "$POST_INSTALL_SCRIPT" ]; then
   else
     log_warn "post_install.sh exited with code $POST_INSTALL_RES. Continuing verification."
   fi
+
+  # Upstream install.sh alignment: provision HomuHomu833 r30 NDK via post_install.sh
+  NDK_FOUND=false
+  for cand_ndk in "$ANDROID_SDK/ndk/30.0.14206865" "$ANDROID_SDK/ndk/29.0.14033849" "$ANDROID_SDK/ndk-bundle"; do
+    if [ -d "$cand_ndk" ]; then
+      NDK_FOUND=true
+      break
+    fi
+  done
+  if [ "$NDK_FOUND" = "false" ]; then
+    log_info "Running upstream post_install.sh --provision-ndk (provisioning pinned HomuHomu833 r30 NDK)..."
+    bash "$POST_INSTALL_SCRIPT" --provision-ndk || {
+      log_warn "post_install.sh --provision-ndk notice. Companion NDK fallback available."
+    }
+  else
+    log_success "Android NDK already detected in SDK."
+  fi
 else
   log_warn "post_install.sh not found at $POST_INSTALL_SCRIPT. Performing targeted safe patches..."
   # Safe line 1 shebang replacement for known wrapper scripts ONLY
@@ -335,16 +352,22 @@ if [ ! -s "$SNAPSHOT" ] || [ ! -s "$STAMP" ]; then
   fi
 fi
 
-# --- Phase 2b: Companion Tools Provisioning (NDK v29.0.14033849 & CMake v4.1.2) ---
-log_section "Phase 2b: Provisioning NDK v29.0.14033849 & CMake v4.1.2"
+# --- Phase 2b: Companion Tools Provisioning (NDK & CMake v4.1.2) ---
+log_section "Phase 2b: Verifying / Provisioning NDK & CMake v4.1.2"
 
 NDK_VER="29.0.14033849"
 NDK_DEST="$ANDROID_SDK/ndk/$NDK_VER"
 NDK_URL="https://github.com/Roni077/acs-build-system/releases/download/v${NDK_VER}/android-ndk-r29-aarch64-linux-android.tar.xz"
 NDK_SHA="cb7e2be23c9029f928da61bfdb5314a7ff7bae972c4ec55c353bb08c4874d15d"
 
-if [ -f "$NDK_DEST/build/ndk-build" ] || [ -f "$NDK_DEST/ndk-build" ]; then
+if [ -f "$ANDROID_SDK/ndk/30.0.14206865/build/ndk-build" ] || [ -f "$ANDROID_SDK/ndk/30.0.14206865/ndk-build" ]; then
+  log_success "NDK 30.0.14206865 (HomuHomu833 r30) provisioned at $ANDROID_SDK/ndk/30.0.14206865"
+  export ANDROID_NDK_HOME="$ANDROID_SDK/ndk/30.0.14206865"
+  export NDK_HOME="$ANDROID_SDK/ndk/30.0.14206865"
+elif [ -f "$NDK_DEST/build/ndk-build" ] || [ -f "$NDK_DEST/ndk-build" ]; then
   log_success "NDK $NDK_VER already provisioned at $NDK_DEST"
+  export ANDROID_NDK_HOME="$NDK_DEST"
+  export NDK_HOME="$NDK_DEST"
 else
   NDK_ARCHIVE="$CACHE_DIR/android-ndk-${NDK_VER}-aarch64.tar.xz"
   log_info "Downloading unencrypted NDK $NDK_VER from $NDK_URL..."
@@ -374,11 +397,11 @@ else
   fi
 fi
 
-if [ -d "$NDK_DEST" ]; then
-  cat << 'EOF_NDK' > "$NDK_DEST/ndk-build"
-#!/bin/sh
-DIR=$(cd "$(dirname "$0")" && pwd)
-exec /data/user/0/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"
+if [ -d "$NDK_DEST" ] && [ ! -d "$ANDROID_SDK/ndk/30.0.14206865" ]; then
+  cat << EOF_NDK > "$NDK_DEST/ndk-build"
+#!$PREFIX/bin/sh
+DIR=\$(cd "\$(dirname "\$0")" && pwd)
+exec "$PREFIX/bin/bash" "\$DIR/build/ndk-build" "\$@"
 EOF_NDK
   chmod +x "$NDK_DEST/ndk-build" "$NDK_DEST/build/ndk-build" 2>/dev/null || true
   ln -sf "$NDK_DEST" "$ANDROID_SDK/ndk-bundle" 2>/dev/null || true

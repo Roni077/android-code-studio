@@ -129,7 +129,7 @@ print_help() {
   echo "       --clean-cache       Clean downloaded archives (.deb, .tar.xz, .zip) after successful setup"
   echo "       --keep-cache        Preserve downloaded archives after extraction"
   echo "       --no-doctor         Skip post-install flutter doctor verification"
-  echo "  -v,  --version <ver>     Specify Flutter version (default: 3.47.8)"
+  echo "  -v,  --version <ver>     Specify Flutter version (default: 3.47.9)"
   echo "  -h,  --help              Show this help message"
 }
 
@@ -160,7 +160,7 @@ while [ $# -gt 0 ]; do
     --no-doctor) run_doctor=false; shift ;;
     -v | --version)
       shift
-      flutter_version="${1:-3.47.8}"
+      flutter_version="${1:-3.47.9}"
       shift
       ;;
     -h | --help) print_help; exit 0 ;;
@@ -455,6 +455,15 @@ if [ -f "$PREFIX/share/flutter/post_install.sh" ]; then
   print_info "Running upstream post_install.sh (17-step post-installation engine)..."
   write_setup_log "ENGINE" "Executing upstream post_install.sh engine"
   bash "$PREFIX/share/flutter/post_install.sh" >> "$SETUP_LOG" 2>&1 || print_warn "post_install.sh exited with warnings; continuing..."
+
+  # Upstream install.sh alignment: provision HomuHomu833 r30 NDK via post_install.sh
+  if [ "$with_ndk" = "true" ] && [ "$requested_ndk_version" = "30.0.14206865" -o -z "$requested_ndk_version" ]; then
+    if [ ! -d "$ANDROID_SDK/ndk/30.0.14206865" ] && [ ! -d "$ANDROID_SDK/ndk/29.0.14033849" ]; then
+      print_info "Provisioning pinned HomuHomu833 r30 NDK via post_install.sh --provision-ndk..."
+      write_setup_log "ENGINE" "Running post_install.sh --provision-ndk"
+      bash "$PREFIX/share/flutter/post_install.sh" --provision-ndk >> "$SETUP_LOG" 2>&1 || print_warn "post_install.sh --provision-ndk exited with warnings; companion provisioner will handle."
+    fi
+  fi
 fi
 
 # Patch Flutter tools android_workflow to accept installed SDK platforms (SDK 33-35)
@@ -596,19 +605,33 @@ provision_companion_tools() {
     local ndk_url=""
     local ndk_sha=""
 
-    [ -z "$ndk_ver" ] && ndk_ver="29.0.14033849"
+    # Detect existing NDK installation or select appropriate version
+    if [ -f "$ANDROID_SDK/ndk/30.0.14206865/build/ndk-build" ] || [ -f "$ANDROID_SDK/ndk/30.0.14206865/ndk-build" ]; then
+      ndk_ver="30.0.14206865"
+    elif [ -f "$ANDROID_SDK/ndk/29.0.14033849/build/ndk-build" ] || [ -f "$ANDROID_SDK/ndk/29.0.14033849/ndk-build" ]; then
+      ndk_ver="29.0.14033849"
+    elif [ -z "$ndk_ver" ] || [ "$ndk_ver" = "latest" ]; then
+      ndk_ver="30.0.14206865"
+    fi
+
     if [ -f "$manifest_file" ] && command -v jq &>/dev/null; then
       if [ "$ndk_ver" = "latest" ]; then
-        ndk_ver=$(jq -r '.ndk_versions[0] // "29.0.14033849"' "$manifest_file" 2>/dev/null)
+        ndk_ver=$(jq -r '.ndk_versions[0] // "30.0.14206865"' "$manifest_file" 2>/dev/null)
       fi
       ndk_url=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.encrypted == false or .encrypted == null) and (.version | startswith($ver))) | .url' "$manifest_file" 2>/dev/null | head -n 1)
       ndk_sha=$(jq -r --arg ver "$ndk_ver" '.packages[] | select(.id=="android-native-kit" and .architecture=="arm64-v8a" and (.encrypted == false or .encrypted == null) and (.version | startswith($ver))) | .sha256' "$manifest_file" 2>/dev/null | head -n 1)
     fi
 
     if [ -z "$ndk_url" ] || [ "$ndk_url" = "null" ]; then
-      ndk_ver="29.0.14033849"
-      ndk_url="https://github.com/Roni077/acs-build-system/releases/download/v${ndk_ver}/android-ndk-r29-aarch64-linux-android.tar.xz"
-      ndk_sha="cb7e2be23c9029f928da61bfdb5314a7ff7bae972c4ec55c353bb08c4874d15d"
+      if [[ "$ndk_ver" =~ ^30 ]]; then
+        ndk_ver="30.0.14206865"
+        ndk_url="https://github.com/HomuHomu833/android-ndk-custom/releases/download/r30/android-ndk-r30-aarch64-linux-android.tar.xz"
+        ndk_sha="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
+      else
+        ndk_ver="29.0.14033849"
+        ndk_url="https://github.com/Roni077/acs-build-system/releases/download/v${ndk_ver}/android-ndk-r29-aarch64-linux-android.tar.xz"
+        ndk_sha="cb7e2be23c9029f928da61bfdb5314a7ff7bae972c4ec55c353bb08c4874d15d"
+      fi
     fi
 
     local ndk_dest="$ANDROID_SDK/ndk/$ndk_ver"

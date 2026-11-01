@@ -4,7 +4,17 @@
 
 set -u
 
-PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+if [ -z "${PREFIX:-}" ]; then
+    if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
+        PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
+    elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
+        PREFIX="/data/data/com.tom.rv2ide/files/usr"
+    elif [ -d "/data/data/com.termux/files/usr" ]; then
+        PREFIX="/data/data/com.termux/files/usr"
+    else
+        PREFIX="/data/data/com.tom.rv2ide/files/usr"
+    fi
+fi
 USER_NAME="$(whoami 2>/dev/null || echo "u0_a0")"
 
 # Colors

@@ -176,8 +176,33 @@ cleanup_on_error() {
 trap cleanup_on_error EXIT ERR INT TERM
 
 # Resolve AAPT2 Path (Mode A vs Mode B)
-PREFIX_PATH="${PREFIX:-/data/data/com.termux/files/usr}"
-HOME_PATH="${HOME:-/data/data/com.termux/files/home}"
+if [ -z "${PREFIX:-}" ]; then
+    if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
+        PREFIX_PATH="/data/user/0/com.tom.rv2ide/files/usr"
+    elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
+        PREFIX_PATH="/data/data/com.tom.rv2ide/files/usr"
+    elif [ -d "/data/data/com.termux/files/usr" ]; then
+        PREFIX_PATH="/data/data/com.termux/files/usr"
+    else
+        PREFIX_PATH="/data/data/com.tom.rv2ide/files/usr"
+    fi
+else
+    PREFIX_PATH="$PREFIX"
+fi
+
+if [ -z "${HOME:-}" ]; then
+    if [ -d "/data/user/0/com.tom.rv2ide/files/home" ]; then
+        HOME_PATH="/data/user/0/com.tom.rv2ide/files/home"
+    elif [ -d "/data/data/com.tom.rv2ide/files/home" ]; then
+        HOME_PATH="/data/data/com.tom.rv2ide/files/home"
+    elif [ -d "/data/data/com.termux/files/home" ]; then
+        HOME_PATH="/data/data/com.termux/files/home"
+    else
+        HOME_PATH="$(dirname "$PREFIX_PATH")/home"
+    fi
+else
+    HOME_PATH="$HOME"
+fi
 MODE_A_AAPT2="$PREFIX_PATH/bin/aapt2"
 MODE_B_AAPT2="$HOME_PATH/Android/Sdk/build-tools/35.0.0/aapt2"
 SYSTEM_BT_AAPT2="$PREFIX_PATH/opt/android-sdk/build-tools/35.0.0/aapt2"

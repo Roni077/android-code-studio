@@ -13,7 +13,17 @@ Orange="\e[38;5;208m"
 yes='^[Yy][Ee]?[Ss]?$'
 
 # Default values
-PREFIX="${PREFIX:-/data/data/com.tom.rv2ide/files/usr}"
+if [ -z "${PREFIX:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/data/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.termux/files/usr" ]; then
+    PREFIX="/data/data/com.termux/files/usr"
+  else
+    PREFIX="/data/data/com.tom.rv2ide/files/usr"
+  fi
+fi
 SYSROOT="${SYSROOT:-$PREFIX}"
 arch=$(uname -m)
 install_dir=$HOME
@@ -259,9 +269,12 @@ setup_ndk() {
         this_abort "Failed to extract NDK"
       fi
       npr "Applying ndk patches..."
-      if echo '#!/bin/sh
-DIR=$(cd "$(dirname "$0")" && pwd)
-/data/data/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"' > "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"; then
+      cat << EOF > "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"
+#!$PREFIX/bin/sh
+DIR="\$(cd "\$(dirname "\$0")" && pwd)"
+exec "$PREFIX/bin/bash" "\$DIR/build/ndk-build" "\$@"
+EOF
+      if [ $? -eq 0 ]; then
         chmod +x "$HOME/android-sdk/ndk/$ndkVersion/ndk-build"
         npr "Successfully applied 2 patches"
       fi
@@ -861,25 +874,25 @@ echo ""
 # Ensure resilient POSIX 'which' wrapper is available
 if ! command -v which &>/dev/null; then
   write_setup_log "TOOL" "Installing lightweight which fallback script to $PREFIX/bin/which"
-  cat << 'EOF' > "$PREFIX/bin/which"
-#!/data/data/com.tom.rv2ide/files/usr/bin/sh
+  cat << EOF > "$PREFIX/bin/which"
+#!$PREFIX/bin/sh
 all=false
 ret=0
-for arg in "$@"; do
-  case "$arg" in
+for arg in "\$@"; do
+  case "\$arg" in
     -a) all=true; continue ;;
     --) continue ;;
     -*) continue ;;
   esac
-  p=$(command -v "$arg" 2>/dev/null)
-  if [ -n "$p" ]; then
-    printf "%s\n" "$p"
-    [ "$all" != "true" ] && exit 0
+  p=\$(command -v "\$arg" 2>/dev/null)
+  if [ -n "\$p" ]; then
+    printf "%s\n" "\$p"
+    [ "\$all" != "true" ] && exit 0
   else
     ret=1
   fi
 done
-exit $ret
+exit \$ret
 EOF
   chmod +x "$PREFIX/bin/which" 2>/dev/null || true
 fi
