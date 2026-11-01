@@ -19,6 +19,7 @@ package com.tom.rv2ide.handlers
 import android.content.Context
 import androidx.lifecycle.LifecycleCoroutineScope
 import com.tom.rv2ide.handlers.system.ICMake
+import com.tom.rv2ide.handlers.system.IFlutter
 import com.tom.rv2ide.handlers.system.INdk
 import com.tom.rv2ide.managers.PreferenceManager
 
@@ -36,7 +37,7 @@ object ConfigHandlerRegistry {
     // Register all handlers here
     handlers.add(INdk(context, prefManager, lifecycleScope, isDarkTheme))
     handlers.add(ICMake(context, prefManager, lifecycleScope, isDarkTheme))
-    // handlers.add(IFlutter(context, prefManager, lifecycleScope, isDarkTheme))
+    handlers.add(IFlutter(context, prefManager, lifecycleScope, isDarkTheme))
     // handlers.add(IRust(context, prefManager, lifecycleScope, isDarkTheme))
   }
 

@@ -173,6 +173,16 @@ if [ "$dart_broken" -eq 1 ]; then
     found_deb="$CACHED_DEB"
   fi
 
+  EXPECTED_DEB_SHA="8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981"
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual_deb_sha=$(sha256sum "$found_deb" | awk '{print $1}')
+    if [ "$actual_deb_sha" = "$EXPECTED_DEB_SHA" ]; then
+      log_success "Flutter deb checksum verified (SHA256: ${actual_deb_sha:0:16}...)"
+    else
+      log_warn "Flutter deb checksum ($actual_deb_sha) differs from 3.47.9-1 pin ($EXPECTED_DEB_SHA); proceeding with caution."
+    fi
+  fi
+
   log_info "Extracting pristine dart-sdk from $found_deb..."
   WORK_EXTRACT="$TMPDIR/deb_extract_$$"
   mkdir -p "$WORK_EXTRACT"

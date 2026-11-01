@@ -72,8 +72,27 @@ abort_script() {
 }
 
 # Environment defaults
-PREFIX="${PREFIX:-/data/data/com.tom.rv2ide/files/usr}"
-HOME="${HOME:-/data/data/com.tom.rv2ide/files/home}"
+if [ -z "${PREFIX:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/user/0/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.tom.rv2ide/files/usr" ]; then
+    PREFIX="/data/data/com.tom.rv2ide/files/usr"
+  elif [ -d "/data/data/com.termux/files/usr" ]; then
+    PREFIX="/data/data/com.termux/files/usr"
+  else
+    PREFIX="/data/data/com.tom.rv2ide/files/usr"
+  fi
+fi
+
+if [ -z "${HOME:-}" ]; then
+  if [ -d "/data/user/0/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/user/0/com.tom.rv2ide/files/home"
+  elif [ -d "/data/data/com.tom.rv2ide/files/home" ]; then
+    HOME="/data/data/com.tom.rv2ide/files/home"
+  else
+    HOME="$(dirname "$PREFIX")/home"
+  fi
+fi
 ANDROID_SDK="${ANDROID_SDK:-$HOME/android-sdk}"
 FLUTTER_ROOT="${FLUTTER_ROOT:-$PREFIX/opt/flutter}"
 
@@ -85,13 +104,13 @@ reinstall=false
 run_doctor=true
 clean_cache=false
 keep_cache=false
-flutter_version="3.47.8"
+flutter_version="3.47.9"
 requested_ndk_version=""
 requested_cmake_version=""
 active_ndk_ver=""
 active_cmake_ver=""
-pkg_rel="7"
-deb_sha256="eac81132f6060f4691cba05b86d445de79abb247ef8dd9aecf7e303f3e872474"
+pkg_rel="1"
+deb_sha256="8a5ee969c1c671360054bf26b992b93b9770372ae6673dfdc6155bd4191dc981"
 
 print_help() {
   echo "Android Code Studio - Flutter Toolchain Setup"
@@ -196,25 +215,25 @@ fi
 # Ensure resilient POSIX 'which' wrapper is available
 if ! command -v which &>/dev/null; then
   write_setup_log "TOOL" "Installing lightweight which fallback script to $PREFIX/bin/which"
-  cat << 'EOF' > "$PREFIX/bin/which"
-#!/data/data/com.tom.rv2ide/files/usr/bin/sh
+  cat << EOF > "$PREFIX/bin/which"
+#!$PREFIX/bin/sh
 all=false
 ret=0
-for arg in "$@"; do
-  case "$arg" in
+for arg in "\$@"; do
+  case "\$arg" in
     -a) all=true; continue ;;
     --) continue ;;
     -*) continue ;;
   esac
-  p=$(command -v "$arg" 2>/dev/null)
-  if [ -n "$p" ]; then
-    printf "%s\n" "$p"
-    [ "$all" != "true" ] && exit 0
+  p=\$(command -v "\$arg" 2>/dev/null)
+  if [ -n "\$p" ]; then
+    printf "%s\n" "\$p"
+    [ "\$all" != "true" ] && exit 0
   else
     ret=1
   fi
 done
-exit $ret
+exit \$ret
 EOF
   chmod +x "$PREFIX/bin/which" 2>/dev/null || true
 fi
@@ -362,8 +381,18 @@ else
   mv "$EXTRACTED_FLUTTER" "$FLUTTER_ROOT"
 
   # Copy share files if present
-  if [ -d "$WORK_DIR/extracted/data/data/com.termux/files/usr/share/flutter" ]; then
-    cp -rf "$WORK_DIR/extracted/data/data/com.termux/files/usr/share/flutter/"* "$PREFIX/share/flutter/" 2>/dev/null || true
+  EXTRACTED_SHARE=""
+  for cand_share in "$WORK_DIR/extracted/data/data/com.termux/files/usr/share/flutter" \
+                    "$WORK_DIR/extracted/usr/share/flutter" \
+                    "$WORK_DIR/extracted/share/flutter"; do
+    if [ -d "$cand_share" ]; then
+      EXTRACTED_SHARE="$cand_share"
+      break
+    fi
+  done
+  if [ -n "$EXTRACTED_SHARE" ]; then
+    mkdir -p "$PREFIX/share/flutter"
+    cp -rn "$EXTRACTED_SHARE/"* "$PREFIX/share/flutter/" 2>/dev/null || cp -rf "$EXTRACTED_SHARE/"* "$PREFIX/share/flutter/" 2>/dev/null || true
   fi
 
   rm -rf "$WORK_DIR"
@@ -629,10 +658,10 @@ provision_companion_tools() {
 
     # Ensure ndk-build launcher and permissions
     if [ -d "$ndk_dest" ]; then
-      cat << 'EOF_NDK' > "$ndk_dest/ndk-build"
-#!/bin/sh
-DIR=$(cd "$(dirname "$0")" && pwd)
-exec /data/data/com.tom.rv2ide/files/usr/bin/bash "$DIR/build/ndk-build" "$@"
+      cat << EOF_NDK > "$ndk_dest/ndk-build"
+#!$PREFIX/bin/sh
+DIR=\$(cd "\$(dirname "\$0")" && pwd)
+exec "$PREFIX/bin/bash" "\$DIR/build/ndk-build" "\$@"
 EOF_NDK
       chmod +x "$ndk_dest/ndk-build"
       chmod +x "$ndk_dest/build/ndk-build" 2>/dev/null || true

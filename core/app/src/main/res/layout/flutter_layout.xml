@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.tom.customizablecardview.CustomizableCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/flutterCardHolder"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="16dp"
+    app:setCardStroke="0sp"
+    app:setCardTitle="Flutter SDK (ARM64)"
+    app:isCheckableCard="false"
+    app:isClickableCard="true"
+    app:setCardSummary="@string/msg_flutter_setup_desc"
+    app:setCardIconHeight="24dp"
+    app:setCardIconWidth="24dp"
+    app:setSummaryTextSize="12dp"
+    app:setTitleTextSize="18dp"
+    app:noIconBackground="true"
+    app:noIcon="true"
+    app:setCardElevation="0dp"
+    app:setCardIcon="@drawable/flutter_app">
+
+    <LinearLayout
+        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/flutter_install_btn"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:layout_margin="4dp"
+            app:icon="@drawable/download"
+            style="@style/Widget.Material3.Button.TonalButton"
+            app:backgroundTint="?attr/colorSurfaceContainerHigh"
+            android:text="Install / Reinstall" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/flutter_doctor_btn"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:layout_margin="4dp"
+            app:icon="@drawable/ic_run_tasks"
+            style="@style/Widget.Material3.Button.TonalButton"
+            app:backgroundTint="?attr/colorSurfaceContainerHigh"
+            android:text="Doctor" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/flutter_remove_btn"
+            android:layout_height="40dp"
+            android:layout_width="wrap_content"
+            android:layout_margin="4dp"
+            android:minWidth="40dp"
+            android:minHeight="40dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:padding="4dp"
+            android:gravity="center"
+            app:iconPadding="0dp"
+            app:iconGravity="textTop"
+            app:icon="@drawable/ic_delete" />
+
+    </LinearLayout>
+
+</com.tom.customizablecardview.CustomizableCardView>

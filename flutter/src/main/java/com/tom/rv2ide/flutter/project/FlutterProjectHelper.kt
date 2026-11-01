@@ -197,6 +197,29 @@ object FlutterProjectHelper {
       }
     }
 
+    // 3. Ensure compileSdk and targetSdk are 36 for AAPT2 16.0.0.4 compatibility
+    val compileSdkRegex = Regex("""compileSdk\s*=?\s*([0-9]+|flutter\.compileSdkVersion)""")
+    if (compileSdkRegex.containsMatchIn(content)) {
+      val match = compileSdkRegex.find(content)?.value ?: ""
+      val replacement = if (isKts) "compileSdk = 36" else "compileSdk 36"
+      if (match != replacement) {
+        content = content.replaceFirst(compileSdkRegex, replacement)
+        modified = true
+        log.info("Updated compileSdk to 36 in {}", targetFile.name)
+      }
+    }
+
+    val targetSdkRegex = Regex("""(targetSdk|targetSdkVersion)\s*=?\s*([0-9]+|flutter\.targetSdkVersion)""")
+    if (targetSdkRegex.containsMatchIn(content)) {
+      val match = targetSdkRegex.find(content)?.value ?: ""
+      val replacement = if (isKts) "targetSdk = 36" else "targetSdkVersion 36"
+      if (match != replacement) {
+        content = content.replaceFirst(targetSdkRegex, replacement)
+        modified = true
+        log.info("Updated targetSdk to 36 in {}", targetFile.name)
+      }
+    }
+
     if (modified) {
       File(appDir, "${targetFile.name}.bak").writeText(targetFile.readText())
       targetFile.writeText(content)

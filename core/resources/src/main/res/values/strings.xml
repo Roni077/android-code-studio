@@ -1022,6 +1022,7 @@ This AI agent is designed to assist you in developing Android applications direc
   <string name="title_flutter_doctor">Flutter Doctor</string>
   <string name="msg_prompt_install_flutter">This project requires the Flutter SDK. Would you like to install it now?</string>
   <string name="msg_flutter_setup_desc">Install and configure Flutter SDK and Dart toolchains for Android Code Studio.</string>
+  <string name="cfg_installed_flutter_version">Installed Flutter Version: %s</string>
   <string name="msg_terminal_new_sessions_disabled">Cannot create session. New sessions are disabled!</string>
   <string name="title_install_location_error">Install location error</string>
   <string name="title_unsupported_user">Unsupported user</string>

@@ -36,6 +36,10 @@ import com.tom.rv2ide.tooling.events.configuration.ProjectConfigurationStartEven
 import com.tom.rv2ide.tooling.events.task.TaskStartEvent
 import com.tom.rv2ide.utils.Environment
 import com.tom.rv2ide.utils.flashError
+import android.content.Intent
+import androidx.core.content.FileProvider
+import com.tom.rv2ide.flutter.service.FlutterBuildEventListener
+import com.tom.rv2ide.flutter.service.FlutterBuildManager
 import com.tom.rv2ide.utils.flashSuccess
 import java.io.File
 import java.lang.ref.WeakReference
@@ -63,13 +67,72 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
   private val activity: EditorHandlerActivity
     get() = checkNotNull(activityReference.get()) { "Activity reference has been destroyed!" }
 
+  private val flutterListener = object : FlutterBuildEventListener {
+    override fun onBuildStarted(command: String) {
+      val act = _activity ?: return
+      act.runOnUiThread {
+        act.editorViewModel.isBuildInProgress = true
+        act.content.bottomSheet.clearBuildOutput()
+        act.appendBuildOutput(">>> Starting Flutter Build...")
+        act.appendBuildOutput(command)
+        act.setStatus("Building Flutter APK...")
+      }
+    }
+
+    override fun onOutput(line: String) {
+      val act = _activity ?: return
+      act.runOnUiThread {
+        act.appendBuildOutput(line)
+      }
+    }
+
+    override fun onPhaseChanged(phase: String) {
+      val act = _activity ?: return
+      act.runOnUiThread {
+        act.setStatus(phase)
+      }
+    }
+
+    override fun onBuildSuccess(apkFile: File?) {
+      val act = _activity ?: return
+      act.runOnUiThread {
+        act.editorViewModel.isBuildInProgress = false
+        act.setStatus("")
+        act.flashSuccess("Flutter build finished successfully!")
+        if (apkFile != null && apkFile.exists()) {
+          try {
+            val uri = FileProvider.getUriForFile(act, "${act.packageName}.provider", apkFile)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+              setDataAndType(uri, "application/vnd.android.package-archive")
+              addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            act.startActivity(intent)
+          } catch (t: Throwable) {
+            log.warn("Failed to prompt package install: {}", t.message)
+          }
+        }
+      }
+    }
+
+    override fun onBuildFailed(exitCode: Int, errorSummary: String?) {
+      val act = _activity ?: return
+      act.runOnUiThread {
+        act.editorViewModel.isBuildInProgress = false
+        act.setStatus("")
+        act.flashError(errorSummary ?: "Flutter build failed with exit code $exitCode")
+      }
+    }
+  }
+
   fun setActivity(activity: EditorHandlerActivity) {
     this.activityReference = WeakReference(activity)
     this.enabled = true
     this.ndkCheckPerformed = false // Reset NDK check when activity is set
+    FlutterBuildManager.addListener(flutterListener)
   }
 
   fun release() {
+    FlutterBuildManager.removeListener(flutterListener)
     activityReference.clear()
     this.enabled = false
     this.ndkCheckPerformed = false

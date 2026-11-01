@@ -47,5 +47,8 @@
     <include
         layout="@layout/cmake_layout"/>
 
+    <include
+        layout="@layout/flutter_layout"/>
+
   </LinearLayout>
 </LinearLayout>
