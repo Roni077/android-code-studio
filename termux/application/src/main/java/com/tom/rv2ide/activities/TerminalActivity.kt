@@ -32,6 +32,8 @@ import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession
 import com.tom.rv2ide.terminal.IdeTerminalSessionClient
 import com.tom.rv2ide.terminal.IdesetupSession
 import com.tom.rv2ide.terminal.FlutterSetupSession
+import com.tom.rv2ide.terminal.NdkSetupSession
+import com.tom.rv2ide.terminal.CMakeSetupSession
 import com.tom.rv2ide.utils.Environment
 import com.tom.rv2ide.utils.flashError
 import org.slf4j.LoggerFactory
@@ -61,6 +63,12 @@ class TerminalActivity : TermuxActivity() {
 
     const val EXTRA_RUN_FLUTTER_SETUP = "ide.terminal.runFlutterSetup"
     const val EXTRA_RUN_FLUTTER_SETUP_ARGS = "ide.terminal.runFlutterSetup.args"
+
+    const val EXTRA_RUN_NDK_SETUP = "ide.terminal.runNdkSetup"
+    const val EXTRA_RUN_NDK_SETUP_ARGS = "ide.terminal.runNdkSetup.args"
+
+    const val EXTRA_RUN_CMAKE_SETUP = "ide.terminal.runCMakeSetup"
+    const val EXTRA_RUN_CMAKE_SETUP_ARGS = "ide.terminal.runCMakeSetup.args"
 
     const val EXTRA_INITIAL_COMMAND = "ide.terminal.initialCommand"
     const val EXTRA_WORKING_DIR = "ide.terminal.workingDir"
@@ -120,6 +128,20 @@ class TerminalActivity : TermuxActivity() {
       val flutterSetupArgs = intent.getStringArrayExtra(EXTRA_RUN_FLUTTER_SETUP_ARGS) ?: emptyArray()
       if (runFlutterSetup) {
         addFlutterSetupSession(flutterSetupArgs)
+        return
+      }
+
+      val runNdkSetup = intent.getBooleanExtra(EXTRA_RUN_NDK_SETUP, false)
+      val ndkSetupArgs = intent.getStringArrayExtra(EXTRA_RUN_NDK_SETUP_ARGS) ?: emptyArray()
+      if (runNdkSetup) {
+        addNdkSetupSession(ndkSetupArgs)
+        return
+      }
+
+      val runCMakeSetup = intent.getBooleanExtra(EXTRA_RUN_CMAKE_SETUP, false)
+      val cmakeSetupArgs = intent.getStringArrayExtra(EXTRA_RUN_CMAKE_SETUP_ARGS) ?: emptyArray()
+      if (runCMakeSetup) {
+        addCMakeSetupSession(cmakeSetupArgs)
         return
       }
 
@@ -192,6 +214,68 @@ class TerminalActivity : TermuxActivity() {
                 /* workingDirectory = */ Environment.HOME.absolutePath,
                 /* isFailSafe = */ false,
                 /* sessionName = */ "Flutter Setup",
+            ),
+            script,
+        )
+
+    session
+        ?: run {
+          flashError(R.string.msg_cannot_create_terminal_session)
+          return
+        }
+
+    termuxTerminalSessionClient.setCurrentSession(session.terminalSession)
+  }
+
+  private fun addNdkSetupSession(args: Array<String>) {
+    val script =
+        NdkSetupSession.createScript(this)
+            ?: run {
+              log.error("Failed to add ndk setup session. Cannot create script.")
+              flashError(R.string.msg_cannot_create_terminal_session)
+              return
+            }
+
+    val session =
+        NdkSetupSession.wrap(
+            termuxService.createTermuxSession(
+                /* executablePath = */ script.absolutePath,
+                /* arguments = */ args,
+                /* stdin = */ null,
+                /* workingDirectory = */ Environment.HOME.absolutePath,
+                /* isFailSafe = */ false,
+                /* sessionName = */ "NDK Setup",
+            ),
+            script,
+        )
+
+    session
+        ?: run {
+          flashError(R.string.msg_cannot_create_terminal_session)
+          return
+        }
+
+    termuxTerminalSessionClient.setCurrentSession(session.terminalSession)
+  }
+
+  private fun addCMakeSetupSession(args: Array<String>) {
+    val script =
+        CMakeSetupSession.createScript(this)
+            ?: run {
+              log.error("Failed to add cmake setup session. Cannot create script.")
+              flashError(R.string.msg_cannot_create_terminal_session)
+              return
+            }
+
+    val session =
+        CMakeSetupSession.wrap(
+            termuxService.createTermuxSession(
+                /* executablePath = */ script.absolutePath,
+                /* arguments = */ args,
+                /* stdin = */ null,
+                /* workingDirectory = */ Environment.HOME.absolutePath,
+                /* isFailSafe = */ false,
+                /* sessionName = */ "CMake Setup",
             ),
             script,
         )

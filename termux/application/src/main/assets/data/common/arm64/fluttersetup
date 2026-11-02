@@ -638,11 +638,13 @@ provision_companion_tools() {
       if [[ "$ndk_ver" =~ ^30 ]]; then
         ndk_ver="30.0.14206865"
         ndk_url="https://github.com/HomuHomu833/android-ndk-custom/releases/download/r30/android-ndk-r30-aarch64-linux-android.tar.xz"
-        ndk_sha="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
+        ndk_sha="406afc90e64eee11caf39c0eadb0fc829b126387f18e50562320cdc6162e5a2b"
+        ndk_fallback_sha="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
       else
         ndk_ver="29.0.14033849"
         ndk_url="https://github.com/Roni077/acs-build-system/releases/download/v${ndk_ver}/android-ndk-r29-aarch64-linux-android.tar.xz"
-        ndk_sha="cb7e2be23c9029f928da61bfdb5314a7ff7bae972c4ec55c353bb08c4874d15d"
+        ndk_sha="9c42546e3ad2c65ba7e3cac8d9a952944534242e176bbf037703e83a2ac8c18d"
+        ndk_fallback_sha="cb7e2be23c9029f928da61bfdb5314a7ff7bae972c4ec55c353bb08c4874d15d"
       fi
     fi
 
@@ -663,9 +665,13 @@ provision_companion_tools() {
       if [ $n_err -eq 0 ]; then
         if [ -n "$ndk_sha" ] && command -v sha256sum &>/dev/null; then
           local actual_sha=$(sha256sum "$ndk_archive" | awk '{print $1}')
-          if [ "$actual_sha" != "$ndk_sha" ]; then
-            rm -f "$ndk_archive"
-            abort_script "NDK archive checksum mismatch ($actual_sha != $ndk_sha). Corrupt download discarded."
+          local sha_matched="false"
+          if [ "$actual_sha" = "$ndk_sha" ] || ([ -n "${ndk_fallback_sha:-}" ] && [ "$actual_sha" = "$ndk_fallback_sha" ]); then
+            sha_matched="true"
+          fi
+          if [ "$sha_matched" != "true" ]; then
+            print_warn "NDK archive checksum mismatch ($actual_sha vs expected $ndk_sha)."
+            abort_script "NDK archive checksum mismatch ($actual_sha != $ndk_sha). Unexpected release digest."
           fi
           print_success "NDK archive verified (SHA256: ${actual_sha:0:16}...)."
           write_setup_log "VERIFY" "NDK archive verified (SHA256: $actual_sha)"

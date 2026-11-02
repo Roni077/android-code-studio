@@ -597,6 +597,127 @@ patch_channel_stable() {
 
 register_patch "channel_stable" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/version.dart" patch_channel_stable
 
+patch_gradle_exec_runner() {
+	# Route gradlew through bash so builds succeed from /storage/emulated/0/ without noexec EACCES
+	if grep -F -q "bypass noexec on external storage" "$1" && grep -F -q "globals.platform" "$1"; then return 0; fi
+
+	local DART_BIN=""
+	if [ -x "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart" ]; then
+		DART_BIN="$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+	elif [ -x "$DART_SDK/bin/dart" ]; then
+		DART_BIN="$DART_SDK/bin/dart"
+	elif [ -x "$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dart" ]; then
+		DART_BIN="$PREFIX/opt/flutter/bin/cache/dart-sdk/bin/dart"
+	elif [ -x "$PREFIX/bin/dart" ]; then
+		DART_BIN="$PREFIX/bin/dart"
+	elif command -v dart >/dev/null 2>&1; then
+		DART_BIN="$(command -v dart)"
+	fi
+
+	if [ -n "$DART_BIN" ]; then
+		local TMP_DART="$PREFIX/tmp/patch_gradle_$$.dart"
+		mkdir -p "$PREFIX/tmp" 2>/dev/null || true
+		cat > "$TMP_DART" <<'DARTEOF'
+import 'dart:io';
+
+void main(List<String> args) {
+  final path = args[0];
+  final prefix = args[1];
+  final file = File(path);
+  if (!file.existsSync()) return;
+
+  final content = file.readAsStringSync();
+
+  // Auto-migrate previous patch containing obsolete _platform identifier
+  if (content.contains('_platform.isLinux') || content.contains('_platform.environment')) {
+    final migrated = content
+        .replaceAll('_platform.isLinux', '(globals.platform.isLinux || globals.platform.isAndroid)')
+        .replaceAll('_platform.environment', 'globals.platform.environment');
+    file.writeAsStringSync(migrated);
+    return;
+  }
+
+  if (content.contains('bypass noexec on external storage') && content.contains('globals.platform')) return;
+
+  final bashBin = '$prefix/bin/bash';
+  final target = '    final command = <String>[\n      gradleExecutablePath,';
+  final targetAlt = '    final List<String> command = <String>[\n      gradleExecutablePath,';
+
+  final replacement = '''    final command = <String>[
+      // Termux / Android: route gradlew through bash to bypass noexec on external storage (/storage/emulated/0)
+      if ((globals.platform.isLinux || globals.platform.isAndroid) && !gradleExecutablePath.endsWith('.bat')) ...<String>[
+        globals.platform.environment['PREFIX'] != null
+            ? '\${globals.platform.environment['PREFIX']}/bin/bash'
+            : '$bashBin',
+      ],
+      gradleExecutablePath,''';
+
+  String updated;
+  if (content.contains(target)) {
+    updated = content.replaceFirst(target, replacement);
+  } else if (content.contains(targetAlt)) {
+    updated = content.replaceFirst(targetAlt, replacement);
+  } else {
+    final regex = RegExp(r'(\s+)(final\s+(?:List<String>\s+)?command\s*=\s*<String>\[\s*gradleExecutablePath,)');
+    if (regex.hasMatch(content)) {
+      updated = content.replaceFirstMapped(regex, (m) {
+        final indent = m[1] ?? '    ';
+        return '$indent' 'final command = <String>[\n'
+            '$indent' '  // Termux / Android: route gradlew through bash to bypass noexec on external storage (/storage/emulated/0)\n'
+            '$indent' '  if ((globals.platform.isLinux || globals.platform.isAndroid) && !gradleExecutablePath.endsWith(\'.bat\')) ...<String>[\n'
+            '$indent' '    globals.platform.environment[\'PREFIX\'] != null ? \'\${globals.platform.environment[\'PREFIX\']}/bin/bash\' : \'$bashBin\',\n'
+            '$indent' '  ],\n'
+            '$indent' '  gradleExecutablePath,';
+      });
+    } else {
+      return;
+    }
+  }
+
+  file.writeAsStringSync(updated);
+}
+DARTEOF
+		"$DART_BIN" "$TMP_DART" "$1" "$PREFIX" 2>/dev/null || true
+		rm -f "$TMP_DART" 2>/dev/null || true
+	elif command -v python3 >/dev/null 2>&1; then
+		python3 - "$1" "$PREFIX" <<'PYEOF'
+import sys
+path = sys.argv[1]
+prefix = sys.argv[2]
+bash_bin = f"{prefix}/bin/bash"
+
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+if '_platform.isLinux' in content or '_platform.environment' in content:
+    migrated = content.replace('_platform.isLinux', '(globals.platform.isLinux || globals.platform.isAndroid)').replace('_platform.environment', 'globals.platform.environment')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(migrated)
+    sys.exit(0)
+
+target = "    final command = <String>[\n      gradleExecutablePath,"
+target_alt = "    final List<String> command = <String>[\n      gradleExecutablePath,"
+
+replacement = f"""    final command = <String>[
+      // Termux / Android: route gradlew through bash to bypass noexec on external storage (/storage/emulated/0)
+      if ((globals.platform.isLinux || globals.platform.isAndroid) && !gradleExecutablePath.endsWith('.bat')) ...<String>[
+        globals.platform.environment['PREFIX'] != null
+            ? '${{globals.platform.environment[\'PREFIX\']}}/bin/bash'
+            : '{bash_bin}',
+      ],
+      gradleExecutablePath,"""
+
+if target in content:
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content.replace(target, replacement, 1))
+elif target_alt in content:
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content.replace(target_alt, replacement, 1))
+PYEOF
+	fi
+}
+register_patch "gradle_exec_runner" "$FLUTTER_ROOT/packages/flutter_tools/lib/src/android/gradle.dart" patch_gradle_exec_runner
+
 register_patch "shebang_flutter" "$FLUTTER_ROOT/bin/flutter" patch_shebang_flutter
 register_patch "shebang_dart" "$FLUTTER_ROOT/bin/dart" patch_shebang_dart
 register_patch "shebang_shared" "$FLUTTER_ROOT/bin/internal/shared.sh" patch_shebang_shared
@@ -849,11 +970,35 @@ setup_ndk_clang_wrappers() {
 # The archive URL and SHA256 mirror scripts/install/versions_common.sh (the
 # installer's source of truth); scripts/ci/check_repo.py
 # (check_ndk_constants_drift) fails CI when the two copies diverge.
-NDK_R30_SHA256="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
+NDK_R30_SHA256="406afc90e64eee11caf39c0eadb0fc829b126387f18e50562320cdc6162e5a2b"
+NDK_R30_FALLBACK_SHA256="aa443113433cf8a3a4a97524a94041972d1ccbb72897adc4aa48c13ae627509d"
+NDK_R29_SHA256="9c42546e3ad2c65ba7e3cac8d9a952944534242e176bbf037703e83a2ac8c18d"
+NDK_R29_FALLBACK_SHA256="cb7e2be23c9029f928da61bfdb5314a7ff7bae972c4ec55c353bb08c4874d15d"
+NDK_R28_SHA256="c540986ce9c4568c5cdc5adb04cbce7570f372f1f27314edd344e45e00f334f1"
+NDK_R28_FALLBACK_SHA256="5dee54fb382e5ee7c6ed0e328157df5f32c8f5933c225b0293ced6a1bf42fad7"
+NDK_R27_SHA256="bb3e98dd14a70fdc82f2468f8bdda1dcbd65e731b36cb00e858cec6155e56694"
+NDK_R27_FALLBACK_SHA256="819b47ed906d4b1282ceaf4f036be69393098a26575369aac3e6526d29f81b7c"
+NDK_R26_SHA256="aaa4a288ad5be38617f33cc6011927e5fb57bae296709471268cec7e5505df5f"
+NDK_R26_FALLBACK_SHA256="d9466fde4c6c0e65652ddc2193113fe5a4c99cff306e85fb8e6c3e10f2bd245e"
 
 ndk_archive_sha256() {
 	case "$1" in
 	30) echo "$NDK_R30_SHA256" ;;
+	29) echo "$NDK_R29_SHA256" ;;
+	28) echo "$NDK_R28_SHA256" ;;
+	27) echo "$NDK_R27_SHA256" ;;
+	26) echo "$NDK_R26_SHA256" ;;
+	*) echo "" ;;
+	esac
+}
+
+ndk_archive_fallback_sha256() {
+	case "$1" in
+	30) echo "$NDK_R30_FALLBACK_SHA256" ;;
+	29) echo "$NDK_R29_FALLBACK_SHA256" ;;
+	28) echo "$NDK_R28_FALLBACK_SHA256" ;;
+	27) echo "$NDK_R27_FALLBACK_SHA256" ;;
+	26) echo "$NDK_R26_FALLBACK_SHA256" ;;
 	*) echo "" ;;
 	esac
 }
@@ -861,8 +1006,17 @@ ndk_archive_sha256() {
 provision_ndk() {
 	local NDK_TARGET="$ANDROID_SDK/ndk/$NDK_VERSION"
 	local NDK_MAJOR="${NDK_VERSION%%.*}"
-	local NDK_URL="${TERMUX_NDK_URL:-https://github.com/HomuHomu833/android-ndk-custom/releases/download/r$NDK_MAJOR/android-ndk-r$NDK_MAJOR-aarch64-linux-android.tar.xz}"
+	local ndk_asset="android-ndk-r$NDK_MAJOR-aarch64-linux-android.tar.xz"
+	[ "$NDK_MAJOR" = "28" ] && ndk_asset="android-ndk-r28c-aarch64-linux-android.tar.xz"
+	[ "$NDK_MAJOR" = "27" ] && ndk_asset="android-ndk-r27d-aarch64-linux-android.tar.xz"
+	[ "$NDK_MAJOR" = "26" ] && ndk_asset="android-ndk-r26d-aarch64-linux-android.tar.xz"
+	local NDK_URL="${TERMUX_NDK_URL:-https://github.com/HomuHomu833/android-ndk-custom/releases/download/r$NDK_MAJOR/$ndk_asset}"
 	local NDK_SHA256="${TERMUX_NDK_SHA256:-$(ndk_archive_sha256 "$NDK_MAJOR")}"
+	local NDK_FALLBACK_SHA256="$(ndk_archive_fallback_sha256 "$NDK_MAJOR")"
+
+	is_valid_sha() {
+		[ "$1" = "$NDK_SHA256" ] || [ -n "$NDK_FALLBACK_SHA256" -a "$1" = "$NDK_FALLBACK_SHA256" ]
+	}
 
 	if [ -d "$NDK_TARGET" ] && ndk_clang_runs "$NDK_TARGET"; then
 		echo "=== NDK $NDK_VERSION already provisioned at $NDK_TARGET ==="
@@ -883,38 +1037,74 @@ provision_ndk() {
 	avail_kb=$(df -Pk "$ANDROID_SDK/ndk" | awk 'NR==2 {print $4}')
 	if [ -z "$avail_kb" ] || [ "$avail_kb" -lt 2700000 ]; then
 		echo "Error: need ~2.6 GB free under $ANDROID_SDK to stage the NDK (have ${avail_kb:-unknown} KB)." >&2
+		[ -n "${SETUP_LOG:-}" ] && echo "[ERROR] Insufficient disk space for NDK staging: ${avail_kb:-unknown} KB" >> "$SETUP_LOG"
 		return 1
 	fi
 
-	local stage tarball
-	stage="$ANDROID_SDK/ndk/.ndk-stage.$$"
-	tarball="$stage/android-ndk-r$NDK_MAJOR-aarch64.tar.xz"
+	# Pre-check xz utility
+	if ! command -v xz >/dev/null 2>&1; then
+		if command -v pkg >/dev/null 2>&1; then
+			echo "Installing xz-utils (required for .tar.xz extraction)..."
+			pkg install -y xz-utils 2>/dev/null || true
+		fi
+		if ! command -v xz >/dev/null 2>&1; then
+			echo "Error: 'xz' is missing and required to unpack the NDK. Run: pkg install -y xz-utils" >&2
+			[ -n "${SETUP_LOG:-}" ] && echo "[ERROR] Missing xz decompression utility for NDK archive" >> "$SETUP_LOG"
+			return 1
+		fi
+	fi
+
+	local cache_dir tarball
+	cache_dir="$ANDROID_SDK/ndk/.cache"
+	mkdir -p "$cache_dir" 2>/dev/null || true
+	tarball="$cache_dir/$ndk_asset"
+
+	local need_download=true
+	if [ -f "$tarball" ]; then
+		local cached_sha
+		cached_sha=$(sha256sum "$tarball" 2>/dev/null | awk '{print $1}')
+		if is_valid_sha "$cached_sha"; then
+			echo "=== Using cached Android NDK r$NDK_MAJOR archive (SHA256 verified) ==="
+			need_download=false
+		else
+			rm -f "$tarball"
+		fi
+	fi
+
+	if [ "$need_download" = "true" ]; then
+		echo "=== Downloading Android NDK r$NDK_MAJOR (aarch64 repack) ==="
+		local tmp_tarball="${tarball}.tmp.$$"
+		if ! curl -fL --retry 3 --progress-bar -o "$tmp_tarball" "$NDK_URL"; then
+			echo "Error: NDK download failed ($NDK_URL)." >&2
+			rm -f "$tmp_tarball"
+			return 1
+		fi
+
+		echo "=== Verifying NDK SHA256 ==="
+		local actual_sha
+		actual_sha=$(sha256sum "$tmp_tarball" | awk '{print $1}')
+		if ! is_valid_sha "$actual_sha"; then
+			echo "Error: NDK archive SHA256 mismatch (expected $NDK_SHA256, got $actual_sha)." >&2
+			rm -f "$tmp_tarball"
+			return 1
+		fi
+		mv -f "$tmp_tarball" "$tarball"
+	fi
+
+	local stage="$ANDROID_SDK/ndk/.ndk-stage.$$"
 	rm -rf "$stage"
 	mkdir -p "$stage"
 
-	echo "=== Downloading Android NDK r$NDK_MAJOR (aarch64 repack, ~550 MB) ==="
-	if ! curl -fL --progress-bar -o "$tarball" "$NDK_URL"; then
-		echo "Error: NDK download failed ($NDK_URL)." >&2
-		rm -rf "$stage"
-		return 1
-	fi
-
-	echo "=== Verifying NDK SHA256 ==="
-	local actual_sha
-	actual_sha=$(sha256sum "$tarball" | awk '{print $1}')
-	if [ "$actual_sha" != "$NDK_SHA256" ]; then
-		echo "Error: NDK archive SHA256 mismatch (expected $NDK_SHA256, got $actual_sha)." >&2
-		rm -rf "$stage"
-		return 1
-	fi
-
 	echo "=== Extracting NDK (staging isolation) ==="
-	if ! tar -xf "$tarball" -C "$stage"; then
+	local extract_log="$SETUP_LOG_DIR/ndk_extract_$$.log"
+	if ! tar -xvf "$tarball" -C "$stage" > "$extract_log" 2>&1; then
 		echo "Error: NDK extraction failed." >&2
+		[ -f "$extract_log" ] && tail -n 25 "$extract_log" >&2
+		[ -n "${SETUP_LOG:-}" ] && [ -f "$extract_log" ] && cat "$extract_log" >> "$SETUP_LOG"
 		rm -rf "$stage"
 		return 1
 	fi
-	rm -f "$tarball"
+	rm -f "$extract_log" 2>/dev/null || true
 
 	local extracted="" cand
 	for cand in "android-ndk-r$NDK_MAJOR-aarch64-linux-android" "android-ndk-r$NDK_MAJOR" "android-ndk-r$NDK_MAJOR-aarch64"; do
@@ -1700,7 +1890,7 @@ if [ -f "$HOME/.flutter_settings" ]; then
 	# grep/append approach dropped the closing brace, then appended a leading
 	# comma, producing a doubled comma whenever "android-sdk" was the last key
 	# (e.g. `false,\n  ,"android-sdk": ...`) and corrupting the file.
-	if ! python3 - "$HOME/.flutter_settings" "$ANDROID_SDK" <<'PYEOF'
+	if command -v python3 >/dev/null 2>&1 && python3 - "$HOME/.flutter_settings" "$ANDROID_SDK" <<'PYEOF'
 import json
 import os
 import sys
@@ -1721,6 +1911,8 @@ with open(tmp, "w", encoding="utf-8") as fh:
 os.replace(tmp, path)
 PYEOF
 	then
+		:
+	else
 		# python3 unavailable or failed: fall back to writing a fresh, valid
 		# settings file (the same shape as the no-file branch below).
 		cat >"$HOME/.flutter_settings" <<SETTINGS

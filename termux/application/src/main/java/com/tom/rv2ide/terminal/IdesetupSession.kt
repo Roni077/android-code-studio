@@ -77,7 +77,81 @@ private constructor(
         FileUtils.setFilePermissions("fluttersetupScript", flutterScript.absolutePath, "rwx")
       }
 
+      // Extract ndksetup.sh alongside idesetup.sh
+      val ndkScript = File(tempDir, "ndksetup.sh")
+      if (writeNdkSetupScript(context, ndkScript)) {
+        FileUtils.setFilePermissions("ndksetupScript", ndkScript.absolutePath, "rwx")
+      }
+
+      // Extract cmakesetup.sh alongside idesetup.sh
+      val cmakeScript = File(tempDir, "cmakesetup.sh")
+      if (writeCMakeSetupScript(context, cmakeScript)) {
+        FileUtils.setFilePermissions("cmakesetupScript", cmakeScript.absolutePath, "rwx")
+      }
+
       return script
+    }
+
+    private fun writeCMakeSetupScript(context: Context, script: File): Boolean {
+      return try {
+        val cpuArch = IDEBuildConfigProvider.getInstance().cpuArch
+        val folderName =
+            when (cpuArch) {
+              CpuArch.AARCH64 -> "arm64"
+              CpuArch.ARM -> "arm"
+              CpuArch.X86_64 -> "x86_64"
+              CpuArch.X86 -> "x86"
+            }
+        val assetName = try {
+          context.assets.open(ToolsManager.getCommonAsset("${folderName}/cmakesetup.sh")).close()
+          "${folderName}/cmakesetup.sh"
+        } catch (_: Exception) {
+          try {
+            context.assets.open(ToolsManager.getCommonAsset("${folderName}/cmakesetup")).close()
+            "${folderName}/cmakesetup"
+          } catch (_: Exception) {
+            "arm64/cmakesetup.sh"
+          }
+        }
+        context.assets.open(ToolsManager.getCommonAsset(assetName)).use { inputStream ->
+          FileOutputStream(script).use { outputStream -> inputStream.copyTo(outputStream) }
+        }
+        true
+      } catch (e: Exception) {
+        log.error("Failed to write cmakesetup script: {}", e.message, e)
+        false
+      }
+    }
+
+    private fun writeNdkSetupScript(context: Context, script: File): Boolean {
+      return try {
+        val cpuArch = IDEBuildConfigProvider.getInstance().cpuArch
+        val folderName =
+            when (cpuArch) {
+              CpuArch.AARCH64 -> "arm64"
+              CpuArch.ARM -> "arm"
+              CpuArch.X86_64 -> "x86_64"
+              CpuArch.X86 -> "x86"
+            }
+        val assetName = try {
+          context.assets.open(ToolsManager.getCommonAsset("${folderName}/ndksetup.sh")).close()
+          "${folderName}/ndksetup.sh"
+        } catch (_: Exception) {
+          try {
+            context.assets.open(ToolsManager.getCommonAsset("${folderName}/ndksetup")).close()
+            "${folderName}/ndksetup"
+          } catch (_: Exception) {
+            "arm64/ndksetup.sh"
+          }
+        }
+        context.assets.open(ToolsManager.getCommonAsset(assetName)).use { inputStream ->
+          FileOutputStream(script).use { outputStream -> inputStream.copyTo(outputStream) }
+        }
+        true
+      } catch (e: Exception) {
+        log.error("Failed to write ndksetup script: {}", e.message, e)
+        false
+      }
     }
 
     private fun writeFlutterSetupScript(context: Context, script: File): Boolean {
@@ -152,6 +226,20 @@ private constructor(
       val flutterErr = FileUtils.deleteFile("fluttersetupScript", flutterScript.absolutePath, true)
       if (flutterErr != null) {
         log.error(flutterErr.errorLogString)
+      }
+    }
+    val ndkScript = File(script.parentFile, "ndksetup.sh")
+    if (ndkScript.exists()) {
+      val ndkErr = FileUtils.deleteFile("ndksetupScript", ndkScript.absolutePath, true)
+      if (ndkErr != null) {
+        log.error(ndkErr.errorLogString)
+      }
+    }
+    val cmakeScript = File(script.parentFile, "cmakesetup.sh")
+    if (cmakeScript.exists()) {
+      val cmakeErr = FileUtils.deleteFile("cmakesetupScript", cmakeScript.absolutePath, true)
+      if (cmakeErr != null) {
+        log.error(cmakeErr.errorLogString)
       }
     }
   }

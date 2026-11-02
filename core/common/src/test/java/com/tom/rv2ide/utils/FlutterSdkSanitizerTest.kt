@@ -86,4 +86,71 @@ class FlutterSdkSanitizerTest {
     // Cleanup
     tempDir.deleteRecursively()
   }
+
+  @Test
+  fun testSanitizeGradleRunnerPatchesFile() {
+    val tempDir = Files.createTempDirectory("flutter_gradle_test_").toFile()
+    val mockPrefix = File(tempDir, "usr")
+    mockPrefix.mkdirs()
+
+    val flutterHome = File(tempDir, "opt/flutter")
+    val gradleDartDir = File(flutterHome, "packages/flutter_tools/lib/src/android")
+    gradleDartDir.mkdirs()
+
+    val snapshotDir = File(flutterHome, "bin/cache")
+    snapshotDir.mkdirs()
+    val mockSnapshot = File(snapshotDir, "flutter_tools.snapshot").apply { writeText("mock snapshot") }
+    val mockStamp = File(snapshotDir, "flutter_tools.stamp").apply { writeText("mock stamp") }
+
+    val gradleDart = File(gradleDartDir, "gradle.dart")
+    gradleDart.writeText(
+        "class AndroidGradleBuilder {\n" +
+            "  void _runGradleTask() {\n" +
+            "    final command = <String>[\n" +
+            "      gradleExecutablePath,\n" +
+            "      ...options,\n" +
+            "      taskName,\n" +
+            "    ];\n" +
+            "  }\n" +
+            "}\n"
+    )
+
+    val patched = FlutterSdkSanitizer.sanitizeGradleRunner(flutterHome, mockPrefix)
+    assertTrue("Sanitization of gradle.dart should succeed", patched)
+
+    val updatedContent = gradleDart.readText()
+    assertTrue("Should contain bypass noexec comment", updatedContent.contains("bypass noexec on external storage"))
+    assertTrue("Should contain globals.platform reference", updatedContent.contains("globals.platform"))
+    assertFalse("Should not contain obsolete _platform reference", updatedContent.contains("_platform.isLinux"))
+    assertTrue("Should contain mock prefix bash", updatedContent.contains("${mockPrefix.absolutePath}/bin/bash"))
+    assertFalse("Snapshot should be invalidated", mockSnapshot.exists())
+    assertFalse("Stamp should be invalidated", mockStamp.exists())
+
+    // Second run should be idempotent
+    val secondRun = FlutterSdkSanitizer.sanitizeGradleRunner(flutterHome, mockPrefix)
+    assertTrue("Second run should report success", secondRun)
+
+    // Test migration of legacy _platform patch
+    gradleDart.writeText(
+        "class AndroidGradleBuilder {\n" +
+            "  void _runGradleTask() {\n" +
+            "    final command = <String>[\n" +
+            "      // Termux / Android: route gradlew through bash to bypass noexec on external storage (/storage/emulated/0)\n" +
+            "      if (_platform.isLinux && !gradleExecutablePath.endsWith('.bat')) ...<String>[\n" +
+            "        _platform.environment['PREFIX'] != null ? '\${_platform.environment['PREFIX']}/bin/bash' : '/bin/bash',\n" +
+            "      ],\n" +
+            "      gradleExecutablePath,\n" +
+            "    ];\n" +
+            "  }\n" +
+            "}\n"
+    )
+    val migrated = FlutterSdkSanitizer.sanitizeGradleRunner(flutterHome, mockPrefix)
+    assertTrue("Migration of legacy _platform patch should succeed", migrated)
+    val migratedContent = gradleDart.readText()
+    assertTrue("Migrated content should contain globals.platform", migratedContent.contains("globals.platform"))
+    assertFalse("Migrated content should not contain _platform.isLinux", migratedContent.contains("_platform.isLinux"))
+
+    // Cleanup
+    tempDir.deleteRecursively()
+  }
 }

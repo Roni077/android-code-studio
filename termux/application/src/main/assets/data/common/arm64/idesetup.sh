@@ -52,6 +52,8 @@ jdk_version="17"
 ndk_version="0"
 ndk=false
 with_flutter=false
+with_cmake=false
+cmake_version=""
 
 # Dedicated setup log folder in home directory ($HOME/setup_logs)
 SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME/setup_logs}"
@@ -719,6 +721,16 @@ while [ $# -gt 0 ]; do
     shift
     with_flutter=true
     ;;
+  -wc | --with-cmake)
+    shift
+    with_cmake=true
+    ;;
+  --cmake-version | --cmake)
+    shift
+    check_arg_value "--cmake" "${1:-}"
+    with_cmake=true
+    cmake_version="$1"
+    ;;
   -g | --with-git)
     shift
     pkgs+=" git"
@@ -1035,6 +1047,28 @@ if [ "$with_flutter" = "true" ]; then
   fi
   if [ $flutter_exit -ne 0 ]; then
     this_abort "Flutter SDK setup failed with exit code $flutter_exit."
+  fi
+fi
+
+if [ "$with_cmake" = "true" ]; then
+  print_info "Initiating CMake setup..."
+  dir="$(cd "$(dirname "${BASH_SOURCE[0]:-${0:-.}}")" 2>/dev/null && pwd || echo ".")"
+  cmake_args=()
+  [ -n "$cmake_version" ] && cmake_args+=("$cmake_version")
+  cmake_exit=0
+  SETUP_LOG="$SETUP_LOG_DIR/cmakesetup.log"
+  if [ -f "$dir/cmakesetup.sh" ]; then
+    bash "$dir/cmakesetup.sh" "${cmake_args[@]}" || cmake_exit=$?
+  elif [ -f "$PREFIX/bin/cmakesetup.sh" ]; then
+    bash "$PREFIX/bin/cmakesetup.sh" "${cmake_args[@]}" || cmake_exit=$?
+  elif [ -f "$PREFIX/bin/cmakesetup" ]; then
+    bash "$PREFIX/bin/cmakesetup" "${cmake_args[@]}" || cmake_exit=$?
+  else
+    print_err "cmakesetup.sh not found in $dir or $PREFIX/bin!"
+    cmake_exit=1
+  fi
+  if [ $cmake_exit -ne 0 ]; then
+    this_abort "CMake setup failed with exit code $cmake_exit."
   fi
 fi
 

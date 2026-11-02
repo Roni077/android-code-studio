@@ -72,6 +72,9 @@ fun flutterProjectTemplate(): ProjectTemplate {
     val pkg = packageName.value
     val pkgPath = pkg.replace('.', '/')
 
+    // 0. .metadata
+    executor.save(metadataYaml(), File(projectDir, ".metadata"))
+
     // 1. pubspec.yaml
     executor.save(pubspecYaml(flutterName), File(projectDir, "pubspec.yaml"))
 
@@ -288,8 +291,8 @@ pluginManagement {
 
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.5.2" apply false
-    id "org.jetbrains.kotlin.android" version "1.9.24" apply false
+    id "com.android.application" version "8.11.1" apply false
+    id "org.jetbrains.kotlin.android" version "2.1.0" apply false
 }
 
 include ":app"
@@ -450,4 +453,17 @@ import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity: FlutterActivity() {
 }
+""".trimIndent()
+
+private fun metadataYaml() = """
+# This file tracks properties of this Flutter project.
+# Used by Flutter tool to assess capabilities and perform upgrades etc.
+#
+# This file should be version controlled and should not be manually edited.
+
+version:
+  revision: "c197ca5199"
+  channel: "stable"
+
+project_type: app
 """.trimIndent()

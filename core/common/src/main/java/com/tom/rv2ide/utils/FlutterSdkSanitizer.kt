@@ -135,11 +135,79 @@ object FlutterSdkSanitizer {
     File(binDir, "dart").setExecutable(true, false)
     File(binDir, "cache/dart-sdk/bin/dart").setExecutable(true, false)
 
+    // Ensure gradle.dart routes through bash for external storage execution (/storage/emulated/0)
+    sanitizeGradleRunner(flutterHome, prefix)
+
     if (sanitizedCount > 0) {
       log.info("Flutter SDK sanitized: updated {} script(s).", sanitizedCount)
     }
 
     return true
+  }
+
+  /**
+   * Patches `packages/flutter_tools/lib/src/android/gradle.dart` to route `gradlew`
+   * through bash so builds succeed from `/storage/emulated/0` without `noexec` permission errors.
+   */
+  fun sanitizeGradleRunner(
+      flutterHome: File = Environment.FLUTTER_HOME,
+      prefix: File = Environment.PREFIX
+  ): Boolean {
+    val gradleDart = File(flutterHome, "packages/flutter_tools/lib/src/android/gradle.dart")
+    if (!gradleDart.exists() || !gradleDart.isFile) return false
+
+    return try {
+      val content = gradleDart.readText(Charsets.UTF_8)
+
+      // Migrate obsolete _platform reference if present from earlier patches
+      if (content.contains("_platform.isLinux") || content.contains("_platform.environment")) {
+        val migrated = content
+            .replace("_platform.isLinux", "(globals.platform.isLinux || globals.platform.isAndroid)")
+            .replace("_platform.environment", "globals.platform.environment")
+        gradleDart.writeText(migrated, Charsets.UTF_8)
+        File(flutterHome, "bin/cache/flutter_tools.snapshot").delete()
+        File(flutterHome, "bin/cache/flutter_tools.stamp").delete()
+        log.info("Migrated flutter_tools gradle.dart _platform to globals.platform.")
+        return true
+      }
+
+      if (content.contains("bypass noexec on external storage") && content.contains("globals.platform")) {
+        return true
+      }
+
+      val target = "final command = <String>[\n      gradleExecutablePath,"
+      val targetAlt = "final List<String> command = <String>[\n      gradleExecutablePath,"
+      val bashBin = "${prefix.absolutePath}/bin/bash"
+
+      val replacement = """final command = <String>[
+      // Termux / Android: route gradlew through bash to bypass noexec on external storage (/storage/emulated/0)
+      if ((globals.platform.isLinux || globals.platform.isAndroid) && !gradleExecutablePath.endsWith('.bat')) ...<String>[
+        globals.platform.environment['PREFIX'] != null
+            ? "${'$'}{globals.platform.environment['PREFIX']}/bin/bash"
+            : "$bashBin",
+      ],
+      gradleExecutablePath,"""
+
+      val updated = when {
+        content.contains(target) -> content.replace(target, replacement)
+        content.contains(targetAlt) -> content.replace(targetAlt, replacement)
+        else -> null
+      }
+
+      if (updated != null) {
+        gradleDart.writeText(updated, Charsets.UTF_8)
+        // Invalidate snapshot cache to force recompilation with the patch
+        File(flutterHome, "bin/cache/flutter_tools.snapshot").delete()
+        File(flutterHome, "bin/cache/flutter_tools.stamp").delete()
+        log.info("Patched flutter_tools gradle.dart to support external storage builds.")
+        true
+      } else {
+        false
+      }
+    } catch (e: Exception) {
+      log.warn("Could not patch flutter_tools gradle.dart: {}", e.message)
+      false
+    }
   }
 
   private fun isElfBinary(file: File): Boolean {
