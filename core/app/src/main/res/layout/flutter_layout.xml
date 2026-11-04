@@ -18,7 +18,7 @@
     app:noIconBackground="true"
     app:noIcon="true"
     app:setCardElevation="0dp"
-    app:setCardIcon="@drawable/flutter_app">
+    app:setCardIcon="@drawable/ic_flutter">
 
     <LinearLayout
         android:layout_height="wrap_content"

@@ -135,3 +135,6 @@ photo_*.jpg
 
 # Archives
 *.zip
+
+# Reference templates
+references/flutter_template/

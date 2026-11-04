@@ -82,9 +82,23 @@ class FlutterApp : Template {
         // 1. Copy all template assets from assets/FlutterApp
         copyAssetFolderWithReplacements(context, ASSETS_BASE_PATH, projectRoot, replacements)
 
-        // 1.1 If Kotlin DSL requested, generate .gradle.kts files and remove Groovy .gradle files
+        // 1.1 Handle DSL selection (Kotlin DSL vs Groovy DSL)
+        val androidDir = File(projectRoot, "android")
+        val appDir = File(androidDir, "app")
         if (options.useKts) {
-          setupKotlinDsl(projectRoot, pkg)
+          // Remove obsolete Groovy files so there is no collision
+          File(androidDir, "settings.gradle").delete()
+          File(androidDir, "build.gradle").delete()
+          File(appDir, "build.gradle").delete()
+          // Ensure Kotlin DSL files exist and are properly configured
+          if (!File(androidDir, "settings.gradle.kts").exists() || !File(appDir, "build.gradle.kts").exists()) {
+            setupKotlinDsl(projectRoot, pkg)
+          }
+        } else {
+          // Remove Kotlin DSL files so Groovy files take precedence
+          File(androidDir, "settings.gradle.kts").delete()
+          File(androidDir, "build.gradle.kts").delete()
+          File(appDir, "build.gradle.kts").delete()
         }
 
         // 2. Write Android MainActivity
@@ -171,7 +185,11 @@ class FlutterApp : Template {
       destDir.mkdirs()
       for (fileName in files) {
         val subAssetPath = "$assetPath/$fileName"
-        val outName = if (fileName == "gitignore") ".gitignore" else fileName
+        val outName = when (fileName) {
+          "gitignore" -> ".gitignore"
+          "metadata" -> ".metadata"
+          else -> fileName
+        }
         val subDestFile = File(destDir, outName)
         copyAssetFolderWithReplacements(context, subAssetPath, subDestFile, replacements)
       }
@@ -248,8 +266,8 @@ class FlutterApp : Template {
 
         plugins {
             id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-            id("com.android.application") version "8.1.0" apply false
-            id("org.jetbrains.kotlin.android") version "1.9.0" apply false
+            id("com.android.application") version "8.11.1" apply false
+            id("org.jetbrains.kotlin.android") version "2.1.0" apply false
         }
 
         include(":app")

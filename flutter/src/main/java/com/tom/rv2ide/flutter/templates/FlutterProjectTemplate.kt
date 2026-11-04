@@ -84,6 +84,9 @@ fun flutterProjectTemplate(): ProjectTemplate {
     // 3. lib/main.dart
     executor.save(mainDart(), File(projectDir, "lib/main.dart"))
 
+    // 3.1 test/widget_test.dart
+    executor.save(widgetTestDart(flutterName), File(projectDir, "test/widget_test.dart"))
+
     // 4. README.md
     executor.save(readmeMd(rawName), File(projectDir, "README.md"))
 
@@ -108,8 +111,20 @@ fun flutterProjectTemplate(): ProjectTemplate {
     // 11. android/app/src/main/AndroidManifest.xml
     executor.save(androidManifestXml(rawName), File(projectDir, "android/app/src/main/AndroidManifest.xml"))
 
+    // 11.1 android/app/src/debug/AndroidManifest.xml
+    executor.save(androidDebugManifestXml(), File(projectDir, "android/app/src/debug/AndroidManifest.xml"))
+
+    // 11.2 android/app/src/profile/AndroidManifest.xml
+    executor.save(androidProfileManifestXml(), File(projectDir, "android/app/src/profile/AndroidManifest.xml"))
+
     // 12. android/app/src/main/res/values/styles.xml
     executor.save(androidStylesXml(), File(projectDir, "android/app/src/main/res/values/styles.xml"))
+
+    // 12.1 android/app/src/main/res/values-night/styles.xml
+    executor.save(androidStylesNightXml(), File(projectDir, "android/app/src/main/res/values-night/styles.xml"))
+
+    // 12.2 android/app/src/main/res/drawable/launch_background.xml
+    executor.save(androidLaunchBackgroundXml(), File(projectDir, "android/app/src/main/res/drawable/launch_background.xml"))
 
     // 13. android/app/src/main/kotlin/<pkgPath>/MainActivity.kt
     executor.save(mainActivityKt(pkg), File(projectDir, "android/app/src/main/kotlin/$pkgPath/MainActivity.kt"))
@@ -162,7 +177,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
@@ -171,10 +186,42 @@ flutter:
 private fun analysisOptionsYaml() = """
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+
 linter:
   rules:
     prefer_const_constructors: true
     prefer_const_declarations: true
+    prefer_const_literals_to_create_immutables: true
+""".trimIndent()
+
+private fun widgetTestDart(name: String) = """
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:$name/main.dart';
+
+void main() {
+  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    // Build our app and trigger a frame.
+    await tester.pumpWidget(const MyApp());
+
+    // Verify that our counter starts at 0.
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('1'), findsNothing);
+
+    // Tap the '+' icon and trigger a frame.
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
+
+    // Verify that our counter has incremented.
+    expect(find.text('0'), findsNothing);
+    expect(find.text('1'), findsOneWidget);
+  });
+}
 """.trimIndent()
 
 private fun mainDart() = """
@@ -326,6 +373,8 @@ android.enableJetifier=true
 android.aapt2FromMavenOverride=${'$'}{com.tom.rv2ide.utils.Environment.PREFIX.absolutePath}/bin/aapt2
 android.enableResourceOptimizations=false
 shrink=false
+android.newDsl=false
+android.builtInKotlin=false
 """.trimIndent()
 
 private fun androidLocalProperties() = """
@@ -414,6 +463,7 @@ private fun androidManifestXml(label: String) = """
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -431,19 +481,56 @@ private fun androidManifestXml(label: String) = """
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>
+""".trimIndent()
+
+private fun androidDebugManifestXml() = """
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+</manifest>
+""".trimIndent()
+
+private fun androidProfileManifestXml() = """
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
 </manifest>
 """.trimIndent()
 
 private fun androidStylesXml() = """
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">@android:color/white</item>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
-    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">@android:color/white</item>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
     </style>
 </resources>
+""".trimIndent()
+
+private fun androidStylesNightXml() = """
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+</resources>
+""".trimIndent()
+
+private fun androidLaunchBackgroundXml() = """
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="?android:colorBackground" />
+</layer-list>
 """.trimIndent()
 
 private fun mainActivityKt(pkg: String) = """
@@ -462,7 +549,7 @@ private fun metadataYaml() = """
 # This file should be version controlled and should not be manually edited.
 
 version:
-  revision: "c197ca5199"
+  revision: "4cf24164269a5ebf0c16a028a00727d0e77bbb05"
   channel: "stable"
 
 project_type: app

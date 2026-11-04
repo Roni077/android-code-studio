@@ -171,7 +171,7 @@ public class IDEDocumentsProvider extends DocumentsProvider {
       flutterRow.add(Root.COLUMN_TITLE, "Flutter SDK");
       flutterRow.add(Root.COLUMN_MIME_TYPES, ALL_MIME_TYPES);
       flutterRow.add(Root.COLUMN_AVAILABLE_BYTES, Environment.FLUTTER_HOME.getFreeSpace());
-      flutterRow.add(Root.COLUMN_ICON, R.drawable.flutter_app);
+      flutterRow.add(Root.COLUMN_ICON, R.drawable.ic_flutter);
     }
 
     return result;
