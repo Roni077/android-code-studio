@@ -214,6 +214,18 @@ public final class TermuxInstaller {
                         throw new RuntimeException("Moving termux prefix staging to prefix directory failed");
                     }
 
+                    // Ensure prefix tmp directory exists with rwx permissions
+                    File tmpDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR;
+                    if (!tmpDir.exists()) {
+                        tmpDir.mkdirs();
+                    }
+                    try {
+                        tmpDir.setReadable(true, false);
+                        tmpDir.setWritable(true, false);
+                        tmpDir.setExecutable(true, false);
+                    } catch (Throwable ignored) {
+                    }
+
                     Logger.logInfo(LOG_TAG, "Bootstrap packages installed successfully.");
 
                     // Recreate env file since termux prefix was wiped earlier

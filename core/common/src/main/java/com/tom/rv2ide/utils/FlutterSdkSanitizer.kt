@@ -57,6 +57,15 @@ object FlutterSdkSanitizer {
     val targetSh = "$prefixPath/bin/sh"
     val legacyTermuxPrefix = "/data/data/com.termux/files/usr"
 
+    // Ensure prefix temporary directory exists for build tooling and Dart pub
+    val tmpDir = File(prefix, "tmp")
+    if (!tmpDir.exists()) {
+      tmpDir.mkdirs()
+    }
+    tmpDir.setReadable(true, false)
+    tmpDir.setWritable(true, false)
+    tmpDir.setExecutable(true, false)
+
     var sanitizedCount = 0
 
     val dirsToScan = mutableListOf(

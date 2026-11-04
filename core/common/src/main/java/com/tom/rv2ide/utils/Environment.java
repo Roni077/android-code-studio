@@ -82,7 +82,7 @@ public final class Environment {
         HOME = mkdirIfNotExits(new File(ROOT, "home"));
         ANDROIDIDE_HOME = mkdirIfNotExits(new File(HOME, ".androidide"));
         // ANDROIDIDE_PREFIX = mkdirIfNotExits(new File(HOME, PREFIX.getName()));
-        TMP_DIR = mkdirIfNotExits(new File(PREFIX, "tmp"));
+        TMP_DIR = ensureTmpDir();
         BIN_DIR = mkdirIfNotExits(new File(PREFIX, "bin"));
         LIB_DIR = mkdirIfNotExits(new File(PREFIX, "lib"));
         PROJECTS_DIR = mkdirIfNotExits(new File(FileUtil.getExternalStorageDir(), PROJECTS_FOLDER));
@@ -146,6 +146,25 @@ public final class Environment {
         System.setProperty("user.home", HOME.getAbsolutePath());
     }
 
+    public static File ensureTmpDir() {
+        if (TMP_DIR == null) {
+            File basePrefix = PREFIX != null ? PREFIX : (ROOT != null ? new File(ROOT, "usr") : null);
+            if (basePrefix != null) {
+                TMP_DIR = new File(basePrefix, "tmp");
+            }
+        }
+        if (TMP_DIR != null) {
+            mkdirIfNotExits(TMP_DIR);
+            try {
+                TMP_DIR.setReadable(true, false);
+                TMP_DIR.setWritable(true, false);
+                TMP_DIR.setExecutable(true, false);
+            } catch (Throwable ignored) {
+            }
+        }
+        return TMP_DIR;
+    }
+
     public static File mkdirIfNotExits(File in) {
         if (in != null && !in.exists()) {
             FileUtils.createOrExistsDir(in);
@@ -195,7 +214,10 @@ public final class Environment {
 
         env.put("LD_LIBRARY_PATH", LIB_DIR.getAbsolutePath() + ":" + 
                 new File(JAVA_HOME, "lib").getAbsolutePath());
-        env.put("TMPDIR", TMP_DIR.getAbsolutePath());
+        File currentTmpDir = ensureTmpDir();
+        if (currentTmpDir != null) {
+            env.put("TMPDIR", currentTmpDir.getAbsolutePath());
+        }
 
         File termuxExecLib = new File(LIB_DIR, "libtermux-exec.so");
         if (termuxExecLib.exists()) {

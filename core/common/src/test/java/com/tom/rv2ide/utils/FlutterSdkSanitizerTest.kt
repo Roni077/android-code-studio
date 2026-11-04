@@ -83,6 +83,11 @@ class FlutterSdkSanitizerTest {
     val helperContent = helperScript.readText()
     assertTrue("Should rewrite #!/usr/bin/env sh to mockPrefix sh", helperContent.startsWith(expectedShShebang))
 
+    // Verify mockPrefix/tmp exists and has executable permissions
+    val tmpDir = File(mockPrefix, "tmp")
+    assertTrue("Prefix tmp directory should be created", tmpDir.exists() && tmpDir.isDirectory)
+    assertTrue("Prefix tmp directory should be executable", tmpDir.canExecute())
+
     // Cleanup
     tempDir.deleteRecursively()
   }

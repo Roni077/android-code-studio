@@ -161,55 +161,12 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
       activity.saveAllResult()
       activity.editorViewModel.isBuildInProgress = true
       activity.content.bottomSheet.clearBuildOutput()
-      activity.appendBuildOutput(">>> Starting Flutter Build (Debug APK)...")
       activity.setStatus("Building Flutter APK...")
-
-      val listener = object : FlutterBuildEventListener {
-        override fun onBuildStarted(command: String) {
-          activity.runOnUiThread {
-            activity.appendBuildOutput(command)
-          }
-        }
-
-        override fun onOutput(line: String) {
-          activity.runOnUiThread {
-            activity.appendBuildOutput(line)
-          }
-        }
-
-        override fun onPhaseChanged(phase: String) {
-          activity.runOnUiThread {
-            activity.setStatus(phase)
-          }
-        }
-
-        override fun onBuildSuccess(apkFile: File?) {
-          activity.runOnUiThread {
-            activity.editorViewModel.isBuildInProgress = false
-            activity.setStatus("")
-            activity.flashSuccess("Flutter build finished successfully!")
-            if (apkFile != null && apkFile.exists()) {
-              install(data, apkFile)
-            } else {
-              activity.flashError("Build finished but APK could not be located.")
-            }
-          }
-        }
-
-        override fun onBuildFailed(exitCode: Int, errorSummary: String?) {
-          activity.runOnUiThread {
-            activity.editorViewModel.isBuildInProgress = false
-            activity.setStatus("")
-            activity.flashError(errorSummary ?: "Flutter build failed with exit code $exitCode")
-          }
-        }
-      }
 
       withContext(Dispatchers.IO) {
         FlutterBuildManager.startBuild(
             projectDir = projectDir,
             commandArgs = listOf("build", "apk", "--debug", "--no-tree-shake-icons"),
-            listener = listener,
         )
       }
     }

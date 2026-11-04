@@ -38,9 +38,14 @@ import com.tom.rv2ide.utils.Environment
 import com.tom.rv2ide.utils.flashError
 import android.content.Intent
 import androidx.core.content.FileProvider
+import com.tom.rv2ide.actions.build.INSTALL_VIA_SHIZUKU
+import com.tom.rv2ide.app.BaseApplication
 import com.tom.rv2ide.flutter.service.FlutterBuildEventListener
 import com.tom.rv2ide.flutter.service.FlutterBuildManager
+import com.tom.rv2ide.utils.ApkInstaller
+import com.tom.rv2ide.utils.InstallationResultHandler
 import com.tom.rv2ide.utils.flashSuccess
+import io.github.miyazkaori.silentinstaller.SilentInstaller
 import java.io.File
 import java.lang.ref.WeakReference
 import org.slf4j.LoggerFactory
@@ -101,14 +106,62 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
         act.flashSuccess("Flutter build finished successfully!")
         if (apkFile != null && apkFile.exists()) {
           try {
-            val uri = FileProvider.getUriForFile(act, "${act.packageName}.provider", apkFile)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-              setDataAndType(uri, "application/vnd.android.package-archive")
-              addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            val prefManager = BaseApplication.getBaseInstance().prefManager
+            if (prefManager.getBoolean(INSTALL_VIA_SHIZUKU, false)) {
+              SilentInstaller.install(
+                  apkFile,
+                  object : SilentInstaller.InstallCallback {
+                    override fun onPermissionDenied() {
+                      act.runOnUiThread {
+                        act.flashError("Permission denied")
+                        ApkInstaller.installApk(
+                            act,
+                            InstallationResultHandler.createEditorActivitySender(act),
+                            apkFile,
+                            act.installationSessionCallback(),
+                        )
+                      }
+                    }
+
+                    override fun onSuccess(status: Int, message: String) {
+                      act.runOnUiThread {
+                        act.flashSuccess("App installed successfully")
+                      }
+                    }
+
+                    override fun onFailure(status: Int, message: String, tr: Throwable?) {
+                      act.runOnUiThread {
+                        act.flashError("Install failure: $message")
+                        ApkInstaller.installApk(
+                            act,
+                            InstallationResultHandler.createEditorActivitySender(act),
+                            apkFile,
+                            act.installationSessionCallback(),
+                        )
+                      }
+                    }
+                  }
+              )
+            } else {
+              ApkInstaller.installApk(
+                  act,
+                  InstallationResultHandler.createEditorActivitySender(act),
+                  apkFile,
+                  act.installationSessionCallback(),
+              )
             }
-            act.startActivity(intent)
           } catch (t: Throwable) {
             log.warn("Failed to prompt package install: {}", t.message)
+            try {
+              val uri = FileProvider.getUriForFile(act, "${act.packageName}.provider", apkFile)
+              val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+              }
+              act.startActivity(intent)
+            } catch (t2: Throwable) {
+              log.error("Fallback package install failed: {}", t2.message)
+            }
           }
         }
       }

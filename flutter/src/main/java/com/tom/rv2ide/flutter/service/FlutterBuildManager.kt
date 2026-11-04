@@ -97,6 +97,9 @@ object FlutterBuildManager {
     // Ensure native AAPT2 override and ARM64 ABI filter are configured
     FlutterProjectHelper.configureProjectForAndroidCS(projectDir)
 
+    // Ensure temporary directory exists and has correct permissions
+    Environment.ensureTmpDir()
+
     listener?.let { addListener(it) }
 
     isBuildInProgress = true
@@ -113,6 +116,15 @@ object FlutterBuildManager {
         val env = mutableMapOf<String, String>()
         Environment.putEnvironment(env, false)
         env["TERM"] = "xterm-256color"
+
+        val tmpDir = Environment.ensureTmpDir() ?: File(Environment.PREFIX, "tmp")
+        if (!tmpDir.exists()) {
+          tmpDir.mkdirs()
+        }
+        tmpDir.setReadable(true, false)
+        tmpDir.setWritable(true, false)
+        tmpDir.setExecutable(true, false)
+        env["TMPDIR"] = tmpDir.absolutePath
 
         process = executeProcessAsync {
           this.command = fullCommand

@@ -29,6 +29,11 @@ if [ -z "${PREFIX:-}" ]; then
     fi
 fi
 
+TMPDIR="${TMPDIR:-$PREFIX/tmp}"
+mkdir -p "$TMPDIR" 2>/dev/null || true
+chmod 1777 "$TMPDIR" 2>/dev/null || chmod 700 "$TMPDIR" 2>/dev/null || true
+export TMPDIR
+
 if [ -z "${FLUTTER_ROOT:-}" ]; then
     if [ -d "$PREFIX/opt/flutter" ]; then
         FLUTTER_ROOT="$PREFIX/opt/flutter"

@@ -59,6 +59,13 @@ object FlutterProjectHelper {
    */
   @JvmStatic
   fun configureProjectForAndroidCS(projectDir: File): Boolean {
+    // Ensure temporary directory exists and has correct permissions
+    try {
+      Environment.ensureTmpDir()
+    } catch (e: Exception) {
+      log.warn("Failed to ensure temporary directory: {}", e.message)
+    }
+
     // Ensure on-device Flutter SDK scripts have valid Android shebangs & permissions
     try {
       FlutterSdkSanitizer.sanitize()

@@ -39,6 +39,12 @@ fi
 ANDROID_SDK="${ANDROID_SDK:-$HOME/android-sdk}"
 FLUTTER_ROOT="${FLUTTER_ROOT:-$PREFIX/opt/flutter}"
 
+# Ensure temporary directory exists and has full rwx permissions
+TMPDIR="${TMPDIR:-$PREFIX/tmp}"
+mkdir -p "$TMPDIR" 2>/dev/null || true
+chmod 1777 "$TMPDIR" 2>/dev/null || chmod 700 "$TMPDIR" 2>/dev/null || true
+export TMPDIR
+
 # Dedicated setup log folder in home directory ($HOME/setup_logs)
 SETUP_LOG_DIR="${SETUP_LOG_DIR:-$HOME/setup_logs}"
 mkdir -p "$SETUP_LOG_DIR" 2>/dev/null || true

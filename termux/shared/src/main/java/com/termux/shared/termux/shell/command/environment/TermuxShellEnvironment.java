@@ -78,6 +78,10 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
 
         // If failsafe is not enabled, then we keep default PATH and TMPDIR so that system binaries can be used
         if (!isFailSafe) {
+            File tmpDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR;
+            if (!tmpDir.exists()) {
+                tmpDir.mkdirs();
+            }
             environment.put(ENV_TMPDIR, TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH);
             environment.put(ENV_PATH, TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + String.format(":%s/cmdline-tools/latest/bin", ANDROID_HOME.getAbsolutePath()));
             environment.remove(ENV_LD_LIBRARY_PATH);
