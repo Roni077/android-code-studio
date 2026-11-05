@@ -339,7 +339,7 @@ pluginManagement {
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "8.11.1" apply false
-    id "org.jetbrains.kotlin.android" version "2.1.0" apply false
+    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
 }
 
 include ":app"
@@ -375,6 +375,7 @@ android.enableResourceOptimizations=false
 shrink=false
 android.newDsl=false
 android.builtInKotlin=false
+kotlin.compiler.execution.strategy=in-process
 """.trimIndent()
 
 private fun androidLocalProperties() = """

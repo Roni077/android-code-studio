@@ -4,6 +4,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  actions: write
+
 on:
   push:
     branches: 
@@ -130,3 +134,17 @@ jobs:
           path: core/app/build/outputs/apk/${{ env.BUILD_TYPE_LOWER }}/*universal*.apk
           if-no-files-found: ignore
         if: always()
+
+  cleanup_cache:
+    name: Auto Clear Cache
+    needs: build_release_apk
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Clear all GitHub Actions caches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh cache delete --all --succeed-on-no-caches --repo ${{ github.repository }} || true

@@ -81,6 +81,7 @@ object FlutterProjectHelper {
 
     try {
       configureGradlew(androidDir)
+      configureGradleWrapper(androidDir)
       configureGradleProperties(androidDir)
       configureAppGradle(androidDir)
       return true
@@ -105,6 +106,31 @@ object FlutterProjectHelper {
     }
   }
 
+  private fun configureGradleWrapper(androidDir: File) {
+    val wrapperProps = File(androidDir, "gradle/wrapper/gradle-wrapper.properties")
+    if (!wrapperProps.exists()) return
+    var content = wrapperProps.readText()
+    var modified = false
+
+    val timeoutRegex = Regex("""networkTimeout\s*=\s*([0-9]+)""")
+    val match = timeoutRegex.find(content)
+    if (match != null) {
+      val currentTimeout = match.groupValues[1].toIntOrNull() ?: 10000
+      if (currentTimeout < 60000) {
+        content = content.replaceFirst(timeoutRegex, "networkTimeout=60000")
+        modified = true
+      }
+    } else {
+      content += "\nnetworkTimeout=60000\n"
+      modified = true
+    }
+
+    if (modified) {
+      wrapperProps.writeText(content)
+      log.info("Updated Gradle wrapper networkTimeout to 60000ms")
+    }
+  }
+
   private fun configureGradleProperties(androidDir: File) {
     val gradleProps = File(androidDir, "gradle.properties")
     val aapt2Path = File(Environment.PREFIX, "bin/aapt2").absolutePath
@@ -112,10 +138,13 @@ object FlutterProjectHelper {
     val optimizationsEntry = "android.enableResourceOptimizations=false"
     val shrinkEntry = "shrink=false"
     val jvmArgsEntry = "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
+    val inProcessEntry = "kotlin.compiler.execution.strategy=in-process"
+    val newDslEntry = "android.newDsl=false"
+    val builtInKotlinEntry = "android.builtInKotlin=false"
 
     if (!gradleProps.exists()) {
-      gradleProps.writeText("$overrideEntry\n$optimizationsEntry\n$shrinkEntry\n$jvmArgsEntry\n")
-      log.info("Created gradle.properties with AAPT2 override and GeneralKaos666 settings: {}", aapt2Path)
+      gradleProps.writeText("$overrideEntry\n$optimizationsEntry\n$shrinkEntry\n$jvmArgsEntry\n$newDslEntry\n$builtInKotlinEntry\n$inProcessEntry\n")
+      log.info("Created gradle.properties with AAPT2 override and AndroidCS settings: {}", aapt2Path)
       return
     }
 
@@ -145,6 +174,18 @@ object FlutterProjectHelper {
     }
     if (!content.contains("org.gradle.jvmargs")) {
       content += "$jvmArgsEntry\n"
+      modified = true
+    }
+    if (!content.contains("kotlin.compiler.execution.strategy")) {
+      content += "$inProcessEntry\n"
+      modified = true
+    }
+    if (!content.contains("android.newDsl")) {
+      content += "$newDslEntry\n"
+      modified = true
+    }
+    if (!content.contains("android.builtInKotlin")) {
+      content += "$builtInKotlinEntry\n"
       modified = true
     }
 
