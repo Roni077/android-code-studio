@@ -5,18 +5,21 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
-    <path
-        android:fillColor="#02569B"
-        android:pathData="M28.4,4.2 L10.8,21.8 L16.3,27.3 L39.4,4.2 Z" />
-    <path
-        android:fillColor="#0175C2"
-        android:pathData="M28.4,26.4 L16.3,38.5 L21.8,44 L39.4,26.4 Z" />
-    <path
-        android:fillColor="#29B6F6"
-        android:pathData="M21.8,26.4 L16.3,31.9 L21.8,37.4 L27.3,31.9 Z" />
-    <path
-        android:fillColor="#02569B"
-        android:pathData="M27.3,31.9 L32.8,26.4 L38.3,31.9 L32.8,37.4 Z" />
+    android:viewportWidth="317"
+    android:viewportHeight="317">
+    <group
+        android:translateX="31">
+        <path
+            android:fillColor="#47C5FB"
+            android:pathData="M158,0 L0,158 L49,206 L255,0 Z" />
+        <path
+            android:fillColor="#47C5FB"
+            android:pathData="M157,145 L72,230 L121,280 L170,231 L255,145 Z" />
+        <path
+            android:fillColor="#00B5F8"
+            android:pathData="M72,230 L120,182 L170,231 L121,280 Z" />
+        <path
+            android:fillColor="#00569E"
+            android:pathData="M121,280 L158,317 L255,317 L170,231 Z" />
+    </group>
 </vector>
