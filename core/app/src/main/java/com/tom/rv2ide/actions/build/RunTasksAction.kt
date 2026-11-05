@@ -19,34 +19,57 @@ package com.tom.rv2ide.actions.build
 
 import android.content.Context
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.DialogFragment
 import com.tom.rv2ide.actions.ActionData
 import com.tom.rv2ide.actions.BaseBuildAction
+import com.tom.rv2ide.flutter.project.FlutterProjectHelper
+import com.tom.rv2ide.flutter.service.FlutterBuildManager
+import com.tom.rv2ide.fragments.FlutterTasksDialogFragment
 import com.tom.rv2ide.fragments.RunTasksDialogFragment
+import com.tom.rv2ide.projects.IProjectManager
 import com.tom.rv2ide.resources.R
 
 /** @author Akash Yadav */
 class RunTasksAction(context: Context, override val order: Int) : BaseBuildAction() {
   override val id: String = "ide.editor.build.runTasks"
-  private var dialog: RunTasksDialogFragment? = null
+  private var dialog: DialogFragment? = null
 
   init {
     label = context.getString(R.string.title_run_tasks)
     icon = ContextCompat.getDrawable(context, R.drawable.ic_run_tasks)
   }
 
+  override fun prepare(data: ActionData) {
+    super.prepare(data)
+    val projectDir = IProjectManager.getInstance().projectDir
+    if (FlutterProjectHelper.isFlutterProject(projectDir)) {
+      label = data.getActivity()?.getString(R.string.title_flutter_tasks) ?: "Flutter Tasks"
+      enabled = !FlutterBuildManager.isBuildInProgress
+      visible = true
+    }
+  }
+
   override suspend fun execAction(data: ActionData): Any {
     dialog?.dismiss()
     dialog = null
-    dialog = RunTasksDialogFragment()
-    return dialog!!
+
+    val projectDir = IProjectManager.getInstance().projectDir
+    val toShow: DialogFragment = if (FlutterProjectHelper.isFlutterProject(projectDir)) {
+      FlutterTasksDialogFragment()
+    } else {
+      RunTasksDialogFragment()
+    }
+
+    dialog = toShow
+    return toShow
   }
 
   override fun postExec(data: ActionData, result: Any) {
-    if (result !is RunTasksDialogFragment) {
+    if (result !is DialogFragment) {
       return
     }
 
-    val activity = data.getActivity()!!
+    val activity = data.getActivity() ?: return
     result.show(activity.supportFragmentManager, this.id)
   }
 

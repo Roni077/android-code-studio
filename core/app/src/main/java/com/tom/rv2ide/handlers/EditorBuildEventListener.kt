@@ -40,10 +40,12 @@ import android.content.Intent
 import androidx.core.content.FileProvider
 import com.tom.rv2ide.actions.build.INSTALL_VIA_SHIZUKU
 import com.tom.rv2ide.app.BaseApplication
+import com.tom.rv2ide.flutter.project.FlutterProjectSynchronizer
 import com.tom.rv2ide.flutter.service.FlutterBuildEventListener
 import com.tom.rv2ide.flutter.service.FlutterBuildManager
 import com.tom.rv2ide.utils.ApkInstaller
 import com.tom.rv2ide.utils.InstallationResultHandler
+import com.tom.rv2ide.utils.IntentUtils
 import com.tom.rv2ide.utils.flashSuccess
 import io.github.miyazkaori.silentinstaller.SilentInstaller
 import java.io.File
@@ -126,6 +128,11 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
                     override fun onSuccess(status: Int, message: String) {
                       act.runOnUiThread {
                         act.flashSuccess("App installed successfully")
+                        val projectDir = IProjectManager.getInstance().projectDir
+                        val appId = projectDir?.let { FlutterProjectSynchronizer.getApplicationId(it) }
+                        if (!appId.isNullOrEmpty()) {
+                          IntentUtils.launchApp(act, appId, logError = false)
+                        }
                       }
                     }
 

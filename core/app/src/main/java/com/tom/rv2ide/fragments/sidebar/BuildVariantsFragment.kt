@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.DividerItemDecoration
 import com.tom.rv2ide.activities.editor.ProjectHandlerActivity
 import com.tom.rv2ide.adapters.BuildVariantsAdapter
 import com.tom.rv2ide.databinding.FragmentBuildVariantsBinding
+import com.tom.rv2ide.flutter.project.FlutterProjectHelper
 import com.tom.rv2ide.fragments.EmptyStateFragment
 import com.tom.rv2ide.tooling.api.models.BuildVariantInfo
 import com.tom.rv2ide.viewmodel.BuildVariantsViewModel
@@ -69,16 +70,23 @@ class BuildVariantsFragment :
         val projectManager = IProjectManager.getInstance()
         val projectDir = projectManager.projectDir
         
+        val isFlutter = FlutterProjectHelper.isFlutterProject(projectDir)
         variantsViewModel.updatedBuildVariants.values.forEach { variantInfo ->
-            val moduleDir = File(projectDir, variantInfo.projectPath.replace(":", File.separator))
-            GradleFileWriter.updateModuleBuildGradle(
-                moduleDir,
-                variantInfo.versionName,
-                variantInfo.versionCode,
-                variantInfo.minSdk,
-                variantInfo.targetSdk,
-                variantInfo.compileSdk
-            )
+            val moduleDir = if (isFlutter) {
+                File(projectDir, "android/app")
+            } else {
+                File(projectDir, variantInfo.projectPath.replace(":", File.separator))
+            }
+            if (moduleDir.exists()) {
+                GradleFileWriter.updateModuleBuildGradle(
+                    moduleDir,
+                    variantInfo.versionName,
+                    variantInfo.versionCode,
+                    variantInfo.minSdk,
+                    variantInfo.targetSdk,
+                    variantInfo.compileSdk
+                )
+            }
         }
         
         activity.initializeProject()

@@ -30,6 +30,7 @@ import com.tom.rv2ide.actions.hasRequiredData
 import com.tom.rv2ide.activities.TerminalActivity
 import com.tom.rv2ide.flutter.project.FlutterProjectHelper
 import com.tom.rv2ide.flutter.service.FlutterBuildManager
+import com.tom.rv2ide.flutter.service.FlutterBuildService
 import com.tom.rv2ide.projects.IProjectManager
 import com.tom.rv2ide.resources.R
 import kotlinx.coroutines.CoroutineName
@@ -170,19 +171,19 @@ class FlutterBuildApkAction(context: Context, override val order: Int) : BaseFlu
     MaterialAlertDialogBuilder(activity)
         .setTitle(R.string.title_flutter_build_target)
         .setItems(targets) { _, which ->
-          when (which) {
-            0 -> FlutterBuildManager.startBuild(
-                projectDir,
-                listOf("build", "apk", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
-            )
-            1 -> FlutterBuildManager.startBuild(
-                projectDir,
-                listOf("build", "apk", "--debug", "--no-tree-shake-icons")
-            )
-            2 -> FlutterBuildManager.startBuild(
-                projectDir,
-                listOf("build", "appbundle", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
-            )
+          val cmd = when (which) {
+            0 -> listOf("build", "apk", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
+            1 -> listOf("build", "apk", "--debug", "--no-tree-shake-icons")
+            else -> listOf("build", "appbundle", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
+          }
+          try {
+            val intent = Intent(activity, FlutterBuildService::class.java).apply {
+              putExtra(FlutterBuildService.EXTRA_PROJECT_DIR, projectDir.absolutePath)
+              putExtra(FlutterBuildService.EXTRA_TASK_COMMAND, cmd.toTypedArray())
+            }
+            activity.startForegroundService(intent)
+          } catch (_: Exception) {
+            FlutterBuildManager.startBuild(projectDir, cmd)
           }
         }
         .setNegativeButton(android.R.string.cancel, null)

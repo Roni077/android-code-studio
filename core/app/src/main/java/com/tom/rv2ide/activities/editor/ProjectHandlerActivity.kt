@@ -31,6 +31,10 @@ import com.tom.rv2ide.R
 import com.tom.rv2ide.R.string
 import com.tom.rv2ide.databinding.LayoutSearchProjectBinding
 import com.tom.rv2ide.flashbar.Flashbar
+import com.tom.rv2ide.flutter.project.FlutterProjectHelper
+import com.tom.rv2ide.flutter.project.FlutterProjectSynchronizer
+import com.tom.rv2ide.flutter.service.FlutterBuildService
+import com.tom.rv2ide.flutter.service.FlutterBuildServiceConnection
 import com.tom.rv2ide.fragments.sheets.ProgressSheet
 import com.tom.rv2ide.handlers.EditorBuildEventListener
 import com.tom.rv2ide.handlers.LspHandler.connectClient
@@ -57,6 +61,7 @@ import com.tom.rv2ide.tooling.api.messages.result.TaskExecutionResult.Failure.PR
 import com.tom.rv2ide.tooling.api.models.BuildVariantInfo
 import com.tom.rv2ide.tooling.api.models.mapToSelectedVariants
 import com.tom.rv2ide.utils.DURATION_INDEFINITE
+import com.tom.rv2ide.utils.flashSuccess
 import com.tom.rv2ide.utils.DialogUtils.newMaterialDialogBuilder
 import com.tom.rv2ide.utils.RecursiveFileSearcher
 import com.tom.rv2ide.utils.flashError
@@ -103,6 +108,7 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
   protected val mBuildEventListener = EditorBuildEventListener()
 
   private val buildServiceConnection = GradleBuildServiceConnnection()
+  private val flutterBuildServiceConnection = FlutterBuildServiceConnection()
 
   companion object {
 
@@ -208,7 +214,12 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
         buildServiceConnection.onConnected = {}
       } catch (err: Throwable) {
         log.error("Unable to unbind service")
-      } finally {
+      }
+
+      try {
+        unbindService(flutterBuildServiceConnection)
+        flutterBuildServiceConnection.onConnected = null
+      } catch (_: Throwable) {} finally {
         Lookup.getDefault().apply {
           (lookup(BuildService.KEY_BUILD_SERVICE) as? GradleBuildService?)?.setEventListener(null)
 
@@ -268,6 +279,21 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
   }
 
   fun startServices() {
+    val projectDir = try { ProjectManagerImpl.getInstance().projectDir } catch (_: Exception) { null }
+    if (FlutterProjectHelper.isFlutterProject(projectDir)) {
+      log.info("Project is a Flutter project. Binding to FlutterBuildService...")
+      flutterBuildServiceConnection.onConnected = {
+        log.info("Connected to FlutterBuildService")
+      }
+      bindService(
+          Intent(this, FlutterBuildService::class.java),
+          flutterBuildServiceConnection,
+          BIND_AUTO_CREATE or BIND_IMPORTANT,
+      )
+      initializeProject(emptyMap())
+      initLspClient()
+      return
+    }
 
     val service = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE) as GradleBuildService?
     if (editorViewModel.isBoundToBuildSerice && service != null) {
@@ -364,6 +390,33 @@ fun initializeProject(buildVariants: Map<String, String>) {
     val projectDir = manager.projectDir
     if (!projectDir.exists()) {
       log.error("GradleProject directory does not exist. Cannot initialize project")
+      return
+    }
+
+    if (FlutterProjectHelper.isFlutterProject(projectDir)) {
+      log.info("Synchronizing Flutter project: {}", projectDir.name)
+      ThreadUtils.runOnUiThread { preProjectInit() }
+      editorActivityScope.launch(Dispatchers.IO) {
+        val info = FlutterProjectSynchronizer.synchronize(projectDir)
+        manager.projectInitialized = true
+        val variantInfo = BuildVariantInfo(
+            projectPath = ":app",
+            buildVariants = listOf("debug", "profile", "release"),
+            selectedVariant = "debug",
+            versionName = info?.versionName ?: "1.0.0",
+            versionCode = info?.versionCode ?: 1,
+            minSdk = 21,
+            targetSdk = 36,
+            compileSdk = 36
+        )
+        updateBuildVariants(mapOf(":app" to variantInfo))
+        ThreadUtils.runOnUiThread {
+          postProjectInit(info != null, null)
+          if (info != null) {
+            flashSuccess("Flutter project synchronized: ${info.name}")
+          }
+        }
+      }
       return
     }
 

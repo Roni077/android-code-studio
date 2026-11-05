@@ -18,6 +18,7 @@
 package com.tom.rv2ide.actions.build
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.ColorFilter
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
@@ -35,6 +36,7 @@ import com.tom.rv2ide.flutter.actions.promptInstallFlutter
 import com.tom.rv2ide.flutter.project.FlutterProjectHelper
 import com.tom.rv2ide.flutter.service.FlutterBuildEventListener
 import com.tom.rv2ide.flutter.service.FlutterBuildManager
+import com.tom.rv2ide.flutter.service.FlutterBuildService
 import com.tom.rv2ide.projects.IProjectManager
 import com.tom.rv2ide.utils.flashSuccess
 import com.tom.rv2ide.lookup.Lookup
@@ -164,10 +166,20 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
       activity.setStatus("Building Flutter APK...")
 
       withContext(Dispatchers.IO) {
-        FlutterBuildManager.startBuild(
-            projectDir = projectDir,
-            commandArgs = listOf("build", "apk", "--debug", "--no-tree-shake-icons"),
-        )
+        val command = listOf("build", "apk", "--debug", "--no-tree-shake-icons")
+        try {
+          val intent = Intent(activity, FlutterBuildService::class.java).apply {
+            putExtra(FlutterBuildService.EXTRA_PROJECT_DIR, projectDir.absolutePath)
+            putExtra(FlutterBuildService.EXTRA_TASK_COMMAND, command.toTypedArray())
+          }
+          activity.startForegroundService(intent)
+        } catch (e: Exception) {
+          log.warn("Failed to start FlutterBuildService via intent: {}", e.message)
+          FlutterBuildManager.startBuild(
+              projectDir = projectDir,
+              commandArgs = command,
+          )
+        }
       }
     }
 
