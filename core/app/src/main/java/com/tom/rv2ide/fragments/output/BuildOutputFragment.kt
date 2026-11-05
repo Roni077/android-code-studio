@@ -46,11 +46,13 @@ class BuildOutputFragment : NonEditableEditorFragment() {
   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
     super.onViewCreated(view, savedInstanceState)
     emptyStateViewModel.emptyMessage.value = getString(R.string.msg_emptyview_buildoutput)
+    editor?.setEditorLanguage(BuildOutputLanguage())
     if (unsavedLines.isNotEmpty()) {
       for (line in unsavedLines) {
         editor?.append("${line!!.trim()}\n")
       }
       unsavedLines.clear()
+      editor?.goToEnd()
     }
   }
 
@@ -95,22 +97,28 @@ class BuildOutputFragment : NonEditableEditorFragment() {
 
   private fun shouldFilterOutput(output: String?): Boolean {
     if (output == null) return false
-    
+
     val trimmedOutput = output.trim()
-    
+
     // Filter: "Starting a Gradle Daemon, ...., use --status for details"
-    if (trimmedOutput.startsWith("Starting a Gradle Daemon") && 
+    if (trimmedOutput.startsWith("Starting a Gradle Daemon") &&
         trimmedOutput.contains("use --status for details")) {
       return true
     }
-    
+
     // Filter: WARNING about android.aapt2FromMavenOverride
-    if (trimmedOutput.startsWith("WARNING:") && 
+    if (trimmedOutput.startsWith("WARNING:") &&
         trimmedOutput.contains("android.aapt2FromMavenOverride") &&
         trimmedOutput.contains("is experimental")) {
       return true
     }
-    
+
+    // Filter: Flutter not in a git repository warning
+    if (trimmedOutput.startsWith("Warning: Flutter is not in a git repository") ||
+        trimmedOutput.contains("unable to determine Flutter version")) {
+      return true
+    }
+
     return false
   }
 
@@ -140,6 +148,9 @@ class BuildOutputFragment : NonEditableEditorFragment() {
           trimExcessLines()
         }
 
+        // Auto-scroll to end so user sees live build output
+        ed.goToEnd()
+
         emptyStateViewModel.isEmpty.value = false
       }
     }
@@ -148,18 +159,13 @@ class BuildOutputFragment : NonEditableEditorFragment() {
   private fun trimExcessLines() {
     editor?.let { ed ->
       try {
-        val text = ed.text?.toString() ?: return
-        val lines = text.lines()
-
-        if (lines.size > MAX_LINES) {
-          val trimmedLines = lines.takeLast(TRIM_TO_LINES)
-          val linesToRemove = lines.size - TRIM_TO_LINES
-          val newText =
-              "... [${linesToRemove} lines trimmed for performance] ...\n\n" +
-                  trimmedLines.joinToString("\n")
-
-          ed.setText(newText)
+        val content = ed.text ?: return
+        if (content.lineCount > MAX_LINES) {
+          val linesToRemove = content.lineCount - TRIM_TO_LINES
+          content.delete(0, 0, linesToRemove, 0)
+          content.insert(0, 0, "... [${linesToRemove} lines trimmed for performance] ...\n\n")
           currentLineCount = TRIM_TO_LINES
+          ed.goToEnd()
         }
       } catch (e: Exception) {
         // Fail silently if trimming doesn't work

@@ -309,6 +309,18 @@ constructor(
     pagerAdapter.buildOutputFragment?.clearOutput()
   }
 
+  fun showBuildOutput(expand: Boolean = false) {
+    runOnUiThread {
+      if (binding.pager.currentItem != 0) {
+        binding.pager.currentItem = 0
+      }
+      binding.tabs.getTabAt(0)?.select()
+      if (expand && behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+        behavior.state = BottomSheetBehavior.STATE_EXPANDED
+      }
+    }
+  }
+
   fun handleDiagnosticsResultVisibility(errorVisible: Boolean) {
     runOnUiThread { pagerAdapter.diagnosticsFragment?.isEmpty = errorVisible }
   }

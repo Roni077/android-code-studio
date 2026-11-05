@@ -79,6 +79,7 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
       val act = _activity ?: return
       act.runOnUiThread {
         act.editorViewModel.isBuildInProgress = true
+        act.content.bottomSheet.showBuildOutput()
         act.content.bottomSheet.clearBuildOutput()
         act.appendBuildOutput(">>> Starting Flutter Build...")
         act.appendBuildOutput(command)
@@ -178,8 +179,9 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
       val act = _activity ?: return
       act.runOnUiThread {
         act.editorViewModel.isBuildInProgress = false
-        act.setStatus("")
-        act.flashError(errorSummary ?: "Flutter build failed with exit code $exitCode")
+        val message = errorSummary ?: "Flutter build failed with exit code $exitCode"
+        act.setStatus(message)
+        act.flashError(message)
       }
     }
   }
@@ -214,6 +216,7 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
     checkNdkRequirements()
 
     activity.editorViewModel.isBuildInProgress = true
+    activity.content.bottomSheet.showBuildOutput()
     activity.content.bottomSheet.clearBuildOutput()
 
     if (buildInfo.tasks.isNotEmpty()) {
