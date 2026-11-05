@@ -74,7 +74,7 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
   private val activity: EditorHandlerActivity
     get() = checkNotNull(activityReference.get()) { "Activity reference has been destroyed!" }
 
-  private val flutterListener = object : FlutterBuildEventListener {
+  val flutterListener: FlutterBuildEventListener = object : FlutterBuildEventListener {
     override fun onBuildStarted(command: String) {
       val act = _activity ?: return
       act.runOnUiThread {

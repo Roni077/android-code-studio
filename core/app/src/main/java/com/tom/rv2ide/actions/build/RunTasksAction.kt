@@ -24,7 +24,6 @@ import com.tom.rv2ide.actions.ActionData
 import com.tom.rv2ide.actions.BaseBuildAction
 import com.tom.rv2ide.flutter.project.FlutterProjectHelper
 import com.tom.rv2ide.flutter.service.FlutterBuildManager
-import com.tom.rv2ide.fragments.FlutterTasksDialogFragment
 import com.tom.rv2ide.fragments.RunTasksDialogFragment
 import com.tom.rv2ide.projects.IProjectManager
 import com.tom.rv2ide.resources.R
@@ -53,13 +52,7 @@ class RunTasksAction(context: Context, override val order: Int) : BaseBuildActio
     dialog?.dismiss()
     dialog = null
 
-    val projectDir = IProjectManager.getInstance().projectDir
-    val toShow: DialogFragment = if (FlutterProjectHelper.isFlutterProject(projectDir)) {
-      FlutterTasksDialogFragment()
-    } else {
-      RunTasksDialogFragment()
-    }
-
+    val toShow = RunTasksDialogFragment()
     dialog = toShow
     return toShow
   }

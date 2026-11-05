@@ -20,6 +20,8 @@ package com.tom.rv2ide.flutter.service
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.IBinder
+import com.tom.rv2ide.lookup.Lookup
+import com.tom.rv2ide.projects.builder.BuildService
 import org.slf4j.LoggerFactory
 
 class FlutterBuildServiceConnection : ServiceConnection {
@@ -35,7 +37,8 @@ class FlutterBuildServiceConnection : ServiceConnection {
     val binder = service as? FlutterServiceBinder
     val s = binder?.service
     if (s != null) {
-      log.info("Connected to FlutterBuildService")
+      log.info("Connected to FlutterBuildService, updating BuildService in Lookup")
+      Lookup.getDefault().update(BuildService.KEY_BUILD_SERVICE, s)
       onConnected?.invoke(s)
     }
   }

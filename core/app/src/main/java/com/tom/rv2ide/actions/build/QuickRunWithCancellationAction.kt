@@ -134,10 +134,9 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
     val isFlutter = FlutterProjectHelper.isFlutterProject(projectDir)
 
     if (data.isBuildInProgress()) {
-      if (isFlutter && FlutterBuildManager.isBuildInProgress) {
-        return FlutterBuildManager.cancelBuild()
-      }
-      return cancelBuild()
+      val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
+      buildService?.cancelCurrentBuild() ?: cancelBuild()
+      return true
     }
 
     if (isFlutter && projectDir != null) {
@@ -166,19 +165,24 @@ class QuickRunWithCancellationAction(context: Context, override val order: Int) 
       activity.setStatus("Building Flutter APK...")
 
       withContext(Dispatchers.IO) {
-        val command = listOf("build", "apk", "--debug", "--no-tree-shake-icons")
-        try {
-          val intent = Intent(activity, FlutterBuildService::class.java).apply {
-            putExtra(FlutterBuildService.EXTRA_PROJECT_DIR, projectDir.absolutePath)
-            putExtra(FlutterBuildService.EXTRA_TASK_COMMAND, command.toTypedArray())
+        val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
+        if (buildService != null) {
+          buildService.executeTasks("build apk --debug --no-tree-shake-icons")
+        } else {
+          val command = listOf("build", "apk", "--debug", "--no-tree-shake-icons")
+          try {
+            val intent = Intent(activity, FlutterBuildService::class.java).apply {
+              putExtra(FlutterBuildService.EXTRA_PROJECT_DIR, projectDir.absolutePath)
+              putExtra(FlutterBuildService.EXTRA_TASK_COMMAND, command.toTypedArray())
+            }
+            activity.startForegroundService(intent)
+          } catch (e: Exception) {
+            log.warn("Failed to start FlutterBuildService via intent: {}", e.message)
+            FlutterBuildManager.startBuild(
+                projectDir = projectDir,
+                commandArgs = command,
+            )
           }
-          activity.startForegroundService(intent)
-        } catch (e: Exception) {
-          log.warn("Failed to start FlutterBuildService via intent: {}", e.message)
-          FlutterBuildManager.startBuild(
-              projectDir = projectDir,
-              commandArgs = command,
-          )
         }
       }
     }

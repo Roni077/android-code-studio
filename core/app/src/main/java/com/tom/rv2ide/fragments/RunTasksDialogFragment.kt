@@ -32,15 +32,19 @@ import androidx.core.view.updateLayoutParams
 import androidx.core.view.updateMargins
 import androidx.core.view.updatePadding
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.transition.TransitionManager
 import com.blankj.utilcode.util.ThreadUtils
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.transition.MaterialSharedAxis
 import com.tom.rv2ide.R.string
+import com.tom.rv2ide.activities.editor.EditorHandlerActivity
 import com.tom.rv2ide.adapters.RunTasksListAdapter
 import com.tom.rv2ide.databinding.LayoutRunTaskBinding
 import com.tom.rv2ide.databinding.LayoutRunTaskDialogBinding
+import com.tom.rv2ide.flutter.project.FlutterProjectHelper
+import com.tom.rv2ide.flutter.tasks.FlutterTaskRegistry
 import com.tom.rv2ide.lookup.Lookup
 import com.tom.rv2ide.models.Checkable
 import com.tom.rv2ide.projects.GradleProject
@@ -54,6 +58,8 @@ import com.tom.rv2ide.utils.doOnApplyWindowInsets
 import com.tom.rv2ide.utils.flashError
 import com.tom.rv2ide.utils.flashInfo
 import com.tom.rv2ide.viewmodel.RunTasksViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
 /**
@@ -170,8 +176,19 @@ class RunTasksDialogFragment : BottomSheetDialogFragment() {
           return@setOnClickListener
         }
 
+        val activity = activity as? EditorHandlerActivity
         val toRun = viewModel.selected.toTypedArray()
-        buildService.executeTasks(*toRun)
+        if (activity != null) {
+          activity.lifecycleScope.launch(Dispatchers.Main) {
+            activity.saveAllResult()
+            activity.editorViewModel.isBuildInProgress = true
+            activity.content.bottomSheet.clearBuildOutput()
+            activity.setStatus("Running tasks...")
+            buildService.executeTasks(*toRun)
+          }
+        } else {
+          buildService.executeTasks(*toRun)
+        }
         dismiss()
       }
     }
@@ -181,6 +198,24 @@ class RunTasksDialogFragment : BottomSheetDialogFragment() {
     viewModel.displayedChild = CHILD_LOADING
 
     executeAsync({
+      val projectDir = IProjectManager.getInstance().projectDir
+      if (projectDir != null && FlutterProjectHelper.isFlutterProject(projectDir)) {
+        return@executeAsync FlutterTaskRegistry.getAvailableTasks().map { task ->
+          Checkable(
+              false,
+              GradleTask(
+                  name = task.name,
+                  description = task.description,
+                  group = task.category.title,
+                  path = "flutter ${task.commandArgs.joinToString(" ")}",
+                  displayName = task.name,
+                  isPublic = true,
+                  projectPath = ":flutter",
+              ),
+          )
+        }
+      }
+
       val workspace =
           IProjectManager.getInstance().getWorkspace()
               ?: return@executeAsync emptyList<Checkable<GradleTask>>()

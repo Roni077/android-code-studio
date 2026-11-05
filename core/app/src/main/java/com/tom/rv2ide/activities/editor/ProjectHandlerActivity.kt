@@ -282,8 +282,11 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
     val projectDir = try { ProjectManagerImpl.getInstance().projectDir } catch (_: Exception) { null }
     if (FlutterProjectHelper.isFlutterProject(projectDir)) {
       log.info("Project is a Flutter project. Binding to FlutterBuildService...")
-      flutterBuildServiceConnection.onConnected = {
+      flutterBuildServiceConnection.onConnected = { flutterService ->
         log.info("Connected to FlutterBuildService")
+        Lookup.getDefault().update(BuildService.KEY_BUILD_SERVICE, flutterService)
+        flutterService.setEventListener(mBuildEventListener.flutterListener)
+        editorViewModel.isBoundToBuildSerice = true
       }
       bindService(
           Intent(this, FlutterBuildService::class.java),

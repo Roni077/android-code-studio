@@ -27,20 +27,34 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.Process
 import androidx.core.app.NotificationManagerCompat
 import com.tom.rv2ide.app.BaseApplication
+import com.tom.rv2ide.flutter.project.FlutterProjectHelper
+import com.tom.rv2ide.flutter.project.FlutterProjectSynchronizer
 import com.tom.rv2ide.flutter.tasks.FlutterTask
+import com.tom.rv2ide.projects.IProjectManager
+import com.tom.rv2ide.projects.builder.BuildService
 import com.tom.rv2ide.resources.R
+import com.tom.rv2ide.tooling.api.messages.InitializeProjectParams
+import com.tom.rv2ide.tooling.api.messages.result.BuildCancellationRequestResult
+import com.tom.rv2ide.tooling.api.messages.result.InitializeResult
+import com.tom.rv2ide.tooling.api.messages.result.TaskExecutionResult
+import com.tom.rv2ide.tooling.api.models.ToolingServerMetadata
 import java.io.File
+import java.util.concurrent.CompletableFuture
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
 /**
  * Android Foreground Service for on-device Flutter builds and task execution.
  *
- * Displays ongoing progress notifications, acquires CPU wakelocks, ensures
- * resilience against the Android low-memory killer (LMK), and supports user cancellation.
+ * Implements [BuildService] to polymorphically unify Flutter task execution and lifecycle
+ * management with the IDE's core build infrastructure.
  */
-class FlutterBuildService : Service(), FlutterBuildEventListener {
+class FlutterBuildService : Service(), BuildService, FlutterBuildEventListener {
 
   companion object {
     private val log = LoggerFactory.getLogger(FlutterBuildService::class.java)
@@ -55,7 +69,7 @@ class FlutterBuildService : Service(), FlutterBuildEventListener {
   private var wakeLock: PowerManager.WakeLock? = null
   private var currentPhase: String = "Building..."
 
-  val isBuildInProgress: Boolean
+  override val isBuildInProgress: Boolean
     get() = FlutterBuildManager.isBuildInProgress
 
   override fun onCreate() {
@@ -120,6 +134,84 @@ class FlutterBuildService : Service(), FlutterBuildEventListener {
       stopForeground(STOP_FOREGROUND_DETACH)
     }
     return cancelled
+  }
+
+  fun setEventListener(listener: FlutterBuildEventListener) {
+    FlutterBuildManager.addListener(listener)
+  }
+
+  override fun isToolingServerStarted(): Boolean = true
+
+  override fun metadata(): CompletableFuture<ToolingServerMetadata> {
+    return CompletableFuture.completedFuture(ToolingServerMetadata(Process.myPid()))
+  }
+
+  override fun initializeProject(params: InitializeProjectParams): CompletableFuture<InitializeResult> {
+    val future = CompletableFuture<InitializeResult>()
+    val projectDir = File(params.directory)
+    CoroutineScope(Dispatchers.IO).launch {
+      try {
+        val info = FlutterProjectSynchronizer.synchronize(projectDir)
+        future.complete(
+            if (info != null) InitializeResult(true, null)
+            else InitializeResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
+        )
+      } catch (e: Exception) {
+        log.error("Failed to initialize Flutter project: {}", e.message)
+        future.complete(InitializeResult(false, TaskExecutionResult.Failure.BUILD_FAILED))
+      }
+    }
+    return future
+  }
+
+  override fun executeTasks(vararg tasks: String): CompletableFuture<TaskExecutionResult> {
+    val future = CompletableFuture<TaskExecutionResult>()
+    val projectDir = IProjectManager.getInstance().projectDir ?: run {
+      future.complete(TaskExecutionResult(false, TaskExecutionResult.Failure.PROJECT_NOT_FOUND))
+      return future
+    }
+
+    if (!FlutterProjectHelper.isFlutterInstalled()) {
+      future.complete(TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED))
+      return future
+    }
+
+    val commandList = mutableListOf<String>()
+    if (tasks.isEmpty()) {
+      commandList.addAll(listOf("build", "apk", "--debug", "--no-tree-shake-icons"))
+    } else {
+      for (task in tasks) {
+        val clean = if (task.startsWith("flutter ")) task.removePrefix("flutter ") else task
+        commandList.addAll(clean.split("\\s+".toRegex()).filter { it.isNotBlank() })
+      }
+    }
+
+    val started = startBuild(projectDir, commandList, object : FlutterBuildEventListener {
+      override fun onBuildStarted(command: String) {}
+      override fun onOutput(line: String) {}
+      override fun onPhaseChanged(phase: String) {}
+      override fun onBuildSuccess(apkFile: File?) {
+        future.complete(TaskExecutionResult.SUCCESS)
+      }
+      override fun onBuildFailed(exitCode: Int, errorSummary: String?) {
+        future.complete(TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED))
+      }
+    })
+
+    if (!started) {
+      future.complete(TaskExecutionResult(false, TaskExecutionResult.Failure.BUILD_FAILED))
+    }
+
+    return future
+  }
+
+  override fun cancelCurrentBuild(): CompletableFuture<BuildCancellationRequestResult> {
+    val wasRunning = FlutterBuildManager.isBuildInProgress
+    val cancelled = cancelBuild()
+    return CompletableFuture.completedFuture(
+        if (wasRunning && cancelled) BuildCancellationRequestResult(true, null)
+        else BuildCancellationRequestResult(false, BuildCancellationRequestResult.Reason.NO_RUNNING_BUILD)
+    )
   }
 
   private fun acquireWakeLock() {
