@@ -18,13 +18,18 @@
 package com.tom.rv2ide.preferences
 
 import android.content.Context
+import android.view.LayoutInflater
 import androidx.preference.Preference
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputLayout
 import com.tom.rv2ide.R as MainR
 import com.tom.rv2ide.app.configuration.IJdkDistributionProvider
+import com.tom.rv2ide.databinding.LayoutTextSizeSliderBinding
 import com.tom.rv2ide.models.JdkDistribution
+import com.tom.rv2ide.preferences.internal.BuildPreferences
+import com.tom.rv2ide.preferences.internal.BuildPreferences.BUILD_OUTPUT_FONT_SIZE
 import com.tom.rv2ide.preferences.internal.BuildPreferences.CUSTOM_GRADLE_INSTALLATION
+import com.tom.rv2ide.preferences.internal.BuildPreferences.DEFAULT_BUILD_OUTPUT_FONT_SIZE
 import com.tom.rv2ide.preferences.internal.BuildPreferences.ENABLE_BUILD_OUTPUT
 import com.tom.rv2ide.preferences.internal.BuildPreferences.DEPENDENCIES_UPDATER
 import com.tom.rv2ide.preferences.internal.BuildPreferences.KT_INDEXING_NOTIFICATION
@@ -82,6 +87,43 @@ private class EnableBuildOutput(
         setValue = ::isBuildOutputEnabled::set,
         getValue = ::isBuildOutputEnabled::get,
     )
+
+@Parcelize
+private class BuildOutputFontSize(
+    override val key: String = BUILD_OUTPUT_FONT_SIZE,
+    override val title: Int = string.idepref_build_output_font_size_title,
+    override val summary: Int? = string.idepref_build_output_font_size_summary,
+    override val icon: Int? = drawable.ic_text_size,
+    override val dialogTitle: Int = string.title_change_text_size,
+    override val dialogMessage: Int? = string.msg_build_output_font_size,
+) : DialogPreference() {
+
+  override fun onConfigureDialog(preference: Preference, dialog: MaterialAlertDialogBuilder) {
+    val binding = LayoutTextSizeSliderBinding.inflate(LayoutInflater.from(preference.context))
+    var size = BuildPreferences.buildOutputFontSize
+    if (size < 6f || size > 32f) {
+      size = DEFAULT_BUILD_OUTPUT_FONT_SIZE
+    }
+    changeTextSize(binding, size)
+    binding.slider.setLabelFormatter { it.toInt().toString() }
+
+    dialog.setView(binding.root)
+    dialog.setPositiveButton(android.R.string.ok) { iface, _ ->
+      iface.dismiss()
+      changeTextSize(binding, binding.slider.value)
+    }
+    dialog.setNegativeButton(android.R.string.cancel, null)
+    dialog.setNeutralButton(string.reset) { iface, _ ->
+      iface.dismiss()
+      changeTextSize(binding, DEFAULT_BUILD_OUTPUT_FONT_SIZE)
+    }
+  }
+
+  private fun changeTextSize(binding: LayoutTextSizeSliderBinding, size: Float) {
+    BuildPreferences.buildOutputFontSize = size
+    binding.slider.value = size
+  }
+}
     
 @Parcelize
 private class DependenciesUpdater(
@@ -116,6 +158,7 @@ private class GradleOptions(
 
   init {
     addPreference(EnableBuildOutput())
+    addPreference(BuildOutputFontSize())
     addPreference(DependenciesUpdater())
     addPreference(KotlinIndexingNotification())
     addPreference(GradleCommands())

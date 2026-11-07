@@ -25,6 +25,7 @@ import com.tom.rv2ide.R;
 import com.tom.rv2ide.databinding.FragmentNonEditableEditorBinding;
 import com.tom.rv2ide.editor.ui.IDEEditor;
 import com.tom.rv2ide.fragments.EmptyStateFragment;
+import com.tom.rv2ide.preferences.internal.BuildPreferences;
 import com.tom.rv2ide.syntax.colorschemes.SchemeAndroidIDE;
 import com.tom.rv2ide.utils.TypefaceUtilsKt;
 import io.github.rosemoe.sora.lang.EmptyLanguage;
@@ -49,7 +50,7 @@ public abstract class NonEditableEditorFragment extends
     editor.setUndoEnabled(false);
     editor.setTypefaceLineNumber(TypefaceUtilsKt.jetbrainsMono());
     editor.setTypefaceText(TypefaceUtilsKt.jetbrainsMono());
-    editor.setTextSize(8);
+    editor.setTextSize(BuildPreferences.INSTANCE.getBuildOutputFontSize());
     editor.setColorScheme(SchemeAndroidIDE.newInstance(requireContext()));
   }
 

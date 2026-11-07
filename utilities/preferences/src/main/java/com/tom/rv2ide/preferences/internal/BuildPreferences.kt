@@ -37,6 +37,8 @@ object BuildPreferences {
   const val PREF_JAVA_HOME = "ide.build.javaHome"
 
   const val ENABLE_BUILD_OUTPUT = "ide.build.enableBuildOutput"
+  const val BUILD_OUTPUT_FONT_SIZE = "idepref_build_output_fontSize"
+  const val DEFAULT_BUILD_OUTPUT_FONT_SIZE = 13f
   const val DEPENDENCIES_UPDATER = "ide.build.enableDependenciesUpdater"
   const val KT_INDEXING_NOTIFICATION = "ide.build.enableKotlinIndexingNotification"
 
@@ -51,6 +53,12 @@ object BuildPreferences {
   var isBuildOutputEnabled: Boolean
     get() = prefManager.getBoolean(ENABLE_BUILD_OUTPUT, true)
     set(value) = prefManager.putBoolean(ENABLE_BUILD_OUTPUT, value)
+
+  var buildOutputFontSize: Float
+    get() = prefManager.getFloat(BUILD_OUTPUT_FONT_SIZE, DEFAULT_BUILD_OUTPUT_FONT_SIZE)
+    set(value) {
+      prefManager.putFloat(BUILD_OUTPUT_FONT_SIZE, value)
+    }
 
   /** Switch for Gradle `--debug` option. */
   var isDebugEnabled: Boolean

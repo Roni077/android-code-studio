@@ -30,6 +30,7 @@ import com.tom.rv2ide.editor.schemes.IDEColorScheme
 import com.tom.rv2ide.editor.schemes.IDEColorSchemeProvider
 import com.tom.rv2ide.fragments.EmptyStateFragment
 import com.tom.rv2ide.models.LogLine
+import com.tom.rv2ide.preferences.internal.BuildPreferences
 import com.tom.rv2ide.utils.ILogger.Level
 import com.tom.rv2ide.utils.jetbrainsMono
 import io.github.rosemoe.sora.widget.style.CursorAnimator
@@ -218,7 +219,7 @@ abstract class LogViewFragment :
     editor.isWordwrap = false
     editor.isUndoEnabled = false
     editor.typefaceLineNumber = jetbrainsMono()
-    editor.setTextSize(8f)
+    editor.setTextSize(BuildPreferences.buildOutputFontSize)
     editor.typefaceText = jetbrainsMono()
     editor.isEnsurePosAnimEnabled = false
     editor.cursorAnimator =

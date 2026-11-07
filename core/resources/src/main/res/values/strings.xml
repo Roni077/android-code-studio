@@ -217,6 +217,9 @@
   
   <string name="idepref_enableBuildOutput_title">Enable build output</string>
   <string name="idepref_enableBuildOutput_summary">Show build output in the editor</string>
+  <string name="idepref_build_output_font_size_title">Build output font size</string>
+  <string name="idepref_build_output_font_size_summary">Set font size for the build output panel</string>
+  <string name="msg_build_output_font_size">Choose the font size (in sp) for the build output panel.</string>
 
   <string name="idepref_dependencies_updater_title">Dependencies Updater</string>
   <string name="idepref_dependencies_updater_summary">

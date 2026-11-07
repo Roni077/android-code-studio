@@ -57,6 +57,7 @@ import kotlin.math.min
 import org.slf4j.LoggerFactory
 import androidx.lifecycle.lifecycleScope
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
+import com.tom.rv2ide.preferences.internal.BuildPreferences
 import com.tom.rv2ide.preferences.internal.DevOpsPreferences
 
 /**
@@ -227,7 +228,7 @@ class AppLogFragment :
         editor.isWordwrap = false
         editor.isUndoEnabled = false
         editor.typefaceLineNumber = jetbrainsMono()
-        editor.setTextSize(8f)
+        editor.setTextSize(BuildPreferences.buildOutputFontSize)
         editor.typefaceText = jetbrainsMono()
         editor.inputType = InputType.TYPE_NULL
         editor.cursorAnimator =
