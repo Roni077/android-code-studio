@@ -20,8 +20,68 @@ package com.tom.rv2ide.plugins
 import com.tom.rv2ide.build.config.BuildConfig
 import java.io.File
 import org.antlr.v4.Tool
+import org.gradle.api.DefaultTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+
+/**
+ * Task to generate ANTLR lexers incrementally with proper input/output caching.
+ */
+abstract class GenerateLexersTask : DefaultTask() {
+
+  @get:InputDirectory
+  @get:PathSensitive(PathSensitivity.RELATIVE)
+  abstract val grammarSourceDir: DirectoryProperty
+
+  @get:OutputDirectory
+  abstract val outputSourceDir: DirectoryProperty
+
+  @TaskAction
+  fun generate() {
+    val grammarDir = grammarSourceDir.get().asFile
+    if (!grammarDir.exists()) {
+      logger.warn("ANTLR grammars directory does not exist: $grammarDir")
+      return
+    }
+
+    val subdirs = grammarDir.listFiles()?.filter { it.isDirectory } ?: return
+    for (subdir in subdirs) {
+      val pck = "${LexerGeneratorPlugin.LEXER_BASE_PACKAGE}.${subdir.name}"
+      val files =
+          subdir.listFiles()?.filter { it.isFile && it.extension == LexerGeneratorPlugin.EXT_G4 }
+              ?.map { it.absolutePath }
+              ?: continue
+
+      if (files.isEmpty()) continue
+
+      val outDir = File(outputSourceDir.get().asFile, pck.replace('.', '/'))
+      if (!outDir.exists() && !outDir.mkdirs()) {
+        logger.error("Failed to create directory $outDir")
+        continue
+      }
+
+      val options =
+          mutableListOf(
+              "-o",
+              outDir.absolutePath,
+              "-package",
+              pck,
+              "-listener",
+              "-visitor",
+              "-Xexact-output-dir",
+          )
+      options.addAll(files)
+
+      Tool(options.toTypedArray()).processGrammarsOnCommandLine()
+    }
+  }
+}
 
 /**
  * Generates lexers from the grammar files in 'src/main/antlr' directory of the project.
@@ -31,7 +91,6 @@ import org.gradle.api.Project
 class LexerGeneratorPlugin : Plugin<Project> {
 
   companion object {
-
     const val LEXER_BASE_PACKAGE = "${BuildConfig.packageName}.lexers"
     const val EXT_G4 = "g4"
   }
@@ -45,43 +104,16 @@ class LexerGeneratorPlugin : Plugin<Project> {
       return
     }
 
-    grammarDir.listFiles()?.filter { it.isDirectory }?.forEach { target.generateGrammar(it) }
-        ?: run {
-          target.logger.error("Failed to list files in $grammarDir")
-          return
+    val taskProvider =
+        target.tasks.register("generateLexers", GenerateLexersTask::class.java) {
+          grammarSourceDir.set(grammarDir)
+          outputSourceDir.set(target.file("src/main/java"))
         }
-  }
 
-  private fun Project.generateGrammar(grammarDir: File) {
-    val pck = "${LEXER_BASE_PACKAGE}.${grammarDir.name}"
-    val files =
-        grammarDir
-            .listFiles()
-            ?.filter { it.isFile && it.extension == EXT_G4 }
-            ?.map { it.absolutePath }
-            ?: run {
-              logger.error("Failed to list grammar files in directory $grammarDir")
-              return
-            }
-
-    val outDir = file("src/main/java/${pck.replace('.', '/')}")
-    if (!outDir.exists() && !outDir.mkdirs()) {
-      logger.error("Failed to create directory $outDir")
-      return
+    target.tasks.matching {
+      it.name.startsWith("compile") || it.name == "sourcesJar"
+    }.configureEach {
+      dependsOn(taskProvider)
     }
-
-    val options =
-        mutableListOf(
-            "-o",
-            outDir.absolutePath,
-            "-package",
-            pck,
-            "-listener",
-            "-visitor",
-            "-Xexact-output-dir",
-        )
-    options.addAll(files)
-
-    Tool(options.toTypedArray()).processGrammarsOnCommandLine()
   }
 }

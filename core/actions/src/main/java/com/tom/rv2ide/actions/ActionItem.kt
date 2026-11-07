@@ -130,7 +130,7 @@ interface ActionItem {
    */
   fun createColorFilter(data: ActionData): ColorFilter? {
     return data.getContext()?.let {
-      PorterDuffColorFilter(it.resolveAttr(R.attr.colorOnSurface), PorterDuff.Mode.SRC_ATOP)
+      PorterDuffColorFilter(it.resolveAttr(com.google.android.material.R.attr.colorOnSurface), PorterDuff.Mode.SRC_ATOP)
     }
   }
 

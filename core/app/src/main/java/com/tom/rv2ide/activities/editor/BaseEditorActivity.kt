@@ -334,37 +334,10 @@ abstract class BaseEditorActivity :
     return app.prefManager.getBoolean(KEY_STRING_EXT_HELPER)
   }
 
-  /** Auto-save TextWatcher implementation */
+  /** Auto-save change detection (event-driven via ContentChangeEvent) */
   private fun checkForContentChanges() {
-    if (!isAutoSaveEnabled() || isDestroying) {
-      return
-    }
-
-    try {
-      val openedFiles = getOpenedFiles()
-      val editors = mutableListOf<CodeEditorView>()
-
-      for (i in openedFiles.indices) {
-        val editor = provideEditorAt(i) ?: continue
-        val file = editor.file ?: continue
-
-        editors.add(editor)
-
-        if (file.exists() && file.canWrite()) {
-          val currentContent = editor.editor?.text?.toString() ?: ""
-          val currentHash = currentContent.hashCode()
-          val lastHash = editorContentHashes[editor] ?: 0
-
-          if (currentHash != lastHash && currentContent.isNotEmpty()) {
-            editorContentHashes[editor] = currentHash
-            pendingSaveFiles[file] = true
-            log.debug("Content changed, marked for auto-save: ${file.absolutePath}")
-          }
-        }
-      }
-    } catch (e: Exception) {
-      // log.error("Error checking content changes", e)
-    }
+    // Event-driven dirty tracking marks pendingSaveFiles on ContentChangeEvent.
+    // No full-text toString hashing required.
   }
 
   /** Start auto-save mechanism */
@@ -379,14 +352,8 @@ abstract class BaseEditorActivity :
             try {
               delay(AUTO_SAVE_DELAY_MS)
 
-              if (isAutoSaveEnabled() && !isDestroying) {
-                withContext(Dispatchers.Main) { checkForContentChanges() }
-
-                delay(100)
-
-                if (pendingSaveFiles.isNotEmpty()) {
-                  performAutoSave()
-                }
+              if (isAutoSaveEnabled() && !isDestroying && pendingSaveFiles.isNotEmpty()) {
+                performAutoSave()
               }
             } catch (e: Exception) {
               if (!isDestroying) {
@@ -512,17 +479,20 @@ abstract class BaseEditorActivity :
     )
   }
 
-  /** Initialize auto-save for an editor (alternative to TextWatcher) */
+  /** Initialize auto-save for an editor (event-driven dirty tracking) */
   protected fun initializeAutoSaveForEditor(editor: CodeEditorView) {
     if (!isAutoSaveEnabled()) {
       return
     }
 
-    // Initialize content hash for change detection
     try {
-      val currentContent = editor.editor?.text?.toString() ?: ""
-      editorContentHashes[editor] = currentContent.hashCode()
-      log.debug("Initialized auto-save for file: ${editor.file?.absolutePath}")
+      editor.editor?.subscribeEvent(io.github.rosemoe.sora.event.ContentChangeEvent::class.java) { _, _ ->
+        val file = editor.file
+        if (file != null && file.exists() && file.canWrite()) {
+          pendingSaveFiles[file] = true
+        }
+      }
+      log.debug("Initialized event-driven auto-save for file: ${editor.file?.absolutePath}")
     } catch (e: Exception) {
       log.error("Failed to initialize auto-save for editor", e)
     }
@@ -543,20 +513,7 @@ abstract class BaseEditorActivity :
   /** Called when manual save is triggered to sync with auto-save state */
   open fun onManualSave() {
     pendingSaveFiles.clear()
-
-    try {
-      val openedFiles = getOpenedFiles()
-      for (i in openedFiles.indices) {
-        val editor = provideEditorAt(i)
-        if (editor != null) {
-          val currentContent = editor.editor?.text?.toString() ?: ""
-          editorContentHashes[editor] = currentContent.hashCode()
-        }
-      }
-      log.debug("Manual save completed, auto-save state synchronized")
-    } catch (e: Exception) {
-      log.error("Error updating content hash after manual save", e)
-    }
+    log.debug("Manual save completed, auto-save state synchronized")
   }
 
   /** Called when a new editor is created or file is opened */

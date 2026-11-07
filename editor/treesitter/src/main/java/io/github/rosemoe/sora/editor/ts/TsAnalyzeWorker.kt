@@ -245,7 +245,11 @@ class TsAnalyzeWorker(
     updateCodeBlocks()
     oldBlocks?.also { ObjectAllocator.recycleBlockLines(it) }
 
-    stylesReceiver?.setStyles(analyzer, styles) { oldTree?.close() }
+    stylesReceiver?.setStyles(analyzer, styles) {
+      if (oldTree != null && oldTree !== copied && oldTree.canAccess()) {
+        oldTree.close()
+      }
+    }
 
     stylesReceiver?.updateBracketProvider(analyzer, TsBracketPairs(copied, languageSpec))
   }

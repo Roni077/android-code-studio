@@ -15,20 +15,17 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 import com.tom.rv2ide.build.config.BuildConfig
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
   kotlin("jvm")
-  kotlin("kapt")
+  alias(libs.plugins.ksp)
 }
 
-
-
 dependencies {
-  kapt(libs.google.auto.service)
-  implementation(libs.google.auto.service.annotations)
+  ksp(libs.auto.service.ksp)
+  compileOnly(libs.google.auto.service.annotations)
 
   implementation(kotlin("stdlib"))
 

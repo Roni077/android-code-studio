@@ -15,13 +15,12 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 import com.tom.rv2ide.build.config.BuildConfig
 
 plugins {
   id("com.android.library")
   id("kotlin-android")
-  id("kotlin-kapt")
+  alias(libs.plugins.ksp)
 }
 
 android {
@@ -29,8 +28,8 @@ android {
 }
 
 dependencies {
-  kapt(libs.google.auto.service)
-  implementation(libs.google.auto.service.annotations)
+  ksp(libs.auto.service.ksp)
+  compileOnly(libs.google.auto.service.annotations)
 
   api(projects.core.common)
   api(projects.core.projects)

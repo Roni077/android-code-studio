@@ -53,10 +53,12 @@ object VersionUtils {
       return cached
     }
 
-    val groupId = BuildConfig.packageName.replace('.', '/')
     val moduleMetadata = "https://repo1.maven.org/maven2/io/github/mohammed-baqer-null/rv2ide-gradle-plugin/maven-metadata.xml"
     return try {
-       BufferedInputStream(URI.create(moduleMetadata).toURL().openStream()).use { inputStream ->
+      val connection = URI.create(moduleMetadata).toURL().openConnection()
+      connection.connectTimeout = 1500
+      connection.readTimeout = 1500
+      BufferedInputStream(connection.getInputStream()).use { inputStream ->
         val builderFactory = DocumentBuilderFactory.newInstance()
         val builder = builderFactory.newDocumentBuilder()
         val document = builder.parse(inputStream)
@@ -65,12 +67,13 @@ object VersionUtils {
         val xPath = xPathFactory.newXPath()
 
         val latestVersion = xPath.evaluate("/metadata/versioning/latest", document)
-         cachedVersion = latestVersion
+        cachedVersion = latestVersion
         println("Found latest version of artifact '$artifact' : '$latestVersion'")
         return@use latestVersion
       }
     } catch (err: Throwable) {
       println("Failed to download $moduleMetadata: ${err.message}")
+      cachedVersion = LATEST_INTEGRATION
       return LATEST_INTEGRATION
     }
   }

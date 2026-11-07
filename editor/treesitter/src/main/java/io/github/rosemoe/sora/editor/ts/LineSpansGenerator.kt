@@ -72,32 +72,27 @@ class LineSpansGenerator(
 
   companion object {
 
-    const val CACHE_THRESHOLD = 60
+    const val CACHE_THRESHOLD = 300
   }
 
-  private val caches = mutableListOf<SpanCache>()
+  private val lruCache =
+      object : LinkedHashMap<Int, MutableList<Span>>(CACHE_THRESHOLD, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, MutableList<Span>>?): Boolean {
+          return size > CACHE_THRESHOLD
+        }
+      }
 
   fun edit(edit: TSInputEdit) {
+    lruCache.clear()
     tree.edit(edit)
   }
 
   fun queryCache(line: Int): MutableList<Span>? {
-    for (i in 0 until caches.size) {
-      val cache = caches[i]
-      if (cache.line == line) {
-        caches.removeAt(i)
-        caches.add(0, cache)
-        return cache.spans
-      }
-    }
-    return null
+    return lruCache[line]
   }
 
   fun pushCache(line: Int, spans: MutableList<Span>) {
-    while (caches.size >= CACHE_THRESHOLD) {
-      caches.removeAt(caches.size - 1)
-    }
-    caches.add(0, SpanCache(spans, line))
+    lruCache[line] = spans
   }
 
   fun captureRegion(startIndex: Int, endIndex: Int): MutableList<Span> {

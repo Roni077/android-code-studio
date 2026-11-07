@@ -18,7 +18,7 @@
 package com.tom.rv2ide.syntax.colorschemes
 
 import android.content.Context
-import com.tom.rv2ide.common.R.attr
+import com.google.android.material.R.attr
 import com.tom.rv2ide.utils.isSystemInDarkMode
 import com.tom.rv2ide.utils.resolveAttr
 

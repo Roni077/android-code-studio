@@ -29,13 +29,10 @@ import com.tom.rv2ide.tasks.cancelIfActive
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 
@@ -47,9 +44,7 @@ import org.slf4j.LoggerFactory
  */
 class MemoryUsageWatcher(private val updateInterval: Long = DEFAULT_UPDATE_INTERVAL) {
 
-  @OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
-  private val coroutineDispatcher = newSingleThreadContext("MemoryUsageWatcher")
-  private val coroutineScope = CoroutineScope(coroutineDispatcher)
+  private var coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
   private val memoryUsage = ConcurrentHashMap<Int, ProcessMemoryInfo>()
   private val watching = AtomicBoolean(false)
 
@@ -89,8 +84,9 @@ class MemoryUsageWatcher(private val updateInterval: Long = DEFAULT_UPDATE_INTER
     }
 
     watching.set(true)
+    coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    coroutineScope.launch(context = SupervisorJob() + coroutineDispatcher) {
+    coroutineScope.launch {
       while (isWatching) {
         readUsages()
 
@@ -103,7 +99,7 @@ class MemoryUsageWatcher(private val updateInterval: Long = DEFAULT_UPDATE_INTER
           withContext(Dispatchers.Main.immediate) { listener.onMemoryUsageChanged(usages) }
         }
 
-        delay(1000)
+        delay(updateInterval)
       }
     }
   }

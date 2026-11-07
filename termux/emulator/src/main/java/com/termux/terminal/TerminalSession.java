@@ -231,13 +231,17 @@ public final class TerminalSession extends TerminalOutput {
         notifyScreenUpdate();
     }
 
-    /** Finish this terminal session by sending SIGKILL to the shell. */
+    /** Finish this terminal session by sending SIGKILL to the process group. */
     public void finishIfRunning() {
         if (isRunning()) {
             try {
-                Os.kill(mShellPid, OsConstants.SIGKILL);
+                Os.kill(-mShellPid, OsConstants.SIGKILL);
             } catch (ErrnoException e) {
-                Logger.logWarn(mClient, LOG_TAG, "Failed sending SIGKILL: " + e.getMessage());
+                try {
+                    Os.kill(mShellPid, OsConstants.SIGKILL);
+                } catch (ErrnoException e2) {
+                    Logger.logWarn(mClient, LOG_TAG, "Failed sending SIGKILL: " + e2.getMessage());
+                }
             }
         }
     }
@@ -340,9 +344,13 @@ public final class TerminalSession extends TerminalOutput {
 
         @Override
         public void handleMessage(Message msg) {
-            int bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false);
-            if (bytesRead > 0) {
+            int bytesRead;
+            boolean hasRead = false;
+            while ((bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false)) > 0) {
                 mEmulator.append(mReceiveBuffer, bytesRead);
+                hasRead = true;
+            }
+            if (hasRead) {
                 notifyScreenUpdate();
             }
 

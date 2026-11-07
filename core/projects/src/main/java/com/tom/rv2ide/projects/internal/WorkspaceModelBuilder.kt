@@ -74,7 +74,11 @@ internal object WorkspaceModelBuilder {
   }
 
   private fun transform(rootProject: IGradleProject): GradleProject {
-    val metadata = rootProject.getMetadata().get()
+    val metadataFuture = rootProject.getMetadata()
+    val tasksFuture = rootProject.getTasks()
+    java.util.concurrent.CompletableFuture.allOf(metadataFuture, tasksFuture).join()
+
+    val metadata = metadataFuture.get()
     return GradleProject(
       name = metadata.name ?: IProject.PROJECT_UNKNOWN,
       description = metadata.description ?: "",
@@ -85,17 +89,38 @@ internal object WorkspaceModelBuilder {
 
       // The list will never change, we could make these thread-safe with
       // CopyOnWriteArrayList
-      tasks = CopyOnWriteArrayList(rootProject.getTasks().get() ?: listOf()),
+      tasks = CopyOnWriteArrayList(tasksFuture.get() ?: listOf()),
     )
   }
 
   private fun transform(
     project: IAndroidProject
   ): AndroidModule {
-    val metadata = project.getMetadata().get() as AndroidProjectMetadata
-    val libraryMap = project.getLibraryMap().get()
-    val variants = project.getVariants().get()
-    val configuredVariant = project.getConfiguredVariant().get()
+    val metadataFuture = project.getMetadata()
+    val libraryMapFuture = project.getLibraryMap()
+    val variantsFuture = project.getVariants()
+    val configuredVariantFuture = project.getConfiguredVariant()
+    val tasksFuture = project.getTasks()
+    val mainSourceSetFuture = project.getMainSourceSet()
+    val bootClasspathsFuture = project.getBootClasspaths()
+    val lintCheckJarsFuture = project.getLintCheckJars()
+
+    java.util.concurrent.CompletableFuture.allOf(
+      metadataFuture,
+      libraryMapFuture,
+      variantsFuture,
+      configuredVariantFuture,
+      tasksFuture,
+      mainSourceSetFuture,
+      bootClasspathsFuture,
+      lintCheckJarsFuture
+    ).join()
+
+    val metadata = metadataFuture.get() as AndroidProjectMetadata
+    val libraryMap = libraryMapFuture.get()
+    val variants = variantsFuture.get()
+    val configuredVariant = configuredVariantFuture.get()
+
     return AndroidModule(
       name = metadata.name ?: IProject.PROJECT_UNKNOWN,
       description = metadata.description ?: "",
@@ -103,20 +128,20 @@ internal object WorkspaceModelBuilder {
       projectDir = metadata.projectDir,
       buildDir = metadata.buildDir,
       buildScript = metadata.buildScript,
-      tasks = project.getTasks().get(),
+      tasks = tasksFuture.get(),
       resourcePrefix = metadata.resourcePrefix,
       namespace = metadata.namespace,
       androidTestNamespace = metadata.androidTestNamespace,
       testFixtureNamespace = metadata.testFixtureNamespace,
       projectType = metadata.androidType,
-      mainSourceSet = project.getMainSourceSet().get(),
+      mainSourceSet = mainSourceSetFuture.get(),
       flags = metadata.flags,
       compilerSettings = metadata.javaCompileOptions,
       viewBindingOptions = metadata.viewBindingOptions,
-      bootClassPaths = project.getBootClasspaths().get(),
+      bootClassPaths = bootClasspathsFuture.get(),
       libraries = libraryMap.keys,
       libraryMap = libraryMap,
-      lintCheckJars = project.getLintCheckJars().get(),
+      lintCheckJars = lintCheckJarsFuture.get(),
       variants = variants,
       configuredVariant = variants.find { it.name == configuredVariant },
       classesJar = metadata.classesJar
@@ -124,7 +149,19 @@ internal object WorkspaceModelBuilder {
   }
 
   private fun transform(project: IJavaProject): JavaModule {
-    val metadata = project.getMetadata().get() as JavaProjectMetadata
+    val metadataFuture = project.getMetadata()
+    val tasksFuture = project.getTasks()
+    val contentRootsFuture = project.getContentRoots()
+    val dependenciesFuture = project.getDependencies()
+
+    java.util.concurrent.CompletableFuture.allOf(
+      metadataFuture,
+      tasksFuture,
+      contentRootsFuture,
+      dependenciesFuture
+    ).join()
+
+    val metadata = metadataFuture.get() as JavaProjectMetadata
     return JavaModule(
       name = metadata.name ?: IProject.PROJECT_UNKNOWN,
       description = metadata.description ?: "",
@@ -132,9 +169,9 @@ internal object WorkspaceModelBuilder {
       projectDir = metadata.projectDir,
       buildDir = metadata.buildDir,
       buildScript = metadata.buildScript,
-      tasks = project.getTasks().get(),
-      contentRoots = project.getContentRoots().get(),
-      dependencies = project.getDependencies().get(),
+      tasks = tasksFuture.get(),
+      contentRoots = contentRootsFuture.get(),
+      dependencies = dependenciesFuture.get(),
       compilerSettings = metadata.compilerSettings,
       classesJar = metadata.classesJar
     )

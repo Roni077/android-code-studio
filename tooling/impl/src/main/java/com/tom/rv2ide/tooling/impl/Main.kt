@@ -126,12 +126,40 @@ object Main {
     }
   }
 
+  fun calculateAdaptiveDaemonHeap(): String {
+    try {
+      val memInfoFile = java.io.File("/proc/meminfo")
+      if (memInfoFile.exists()) {
+        val lines = memInfoFile.readLines()
+        for (line in lines) {
+          if (line.startsWith("MemTotal:")) {
+            val parts = line.split("\\s+".toRegex())
+            if (parts.size >= 2) {
+              val totalKb = parts[1].toLongOrNull() ?: 0L
+              val totalMb = totalKb / 1024
+              return when {
+                totalMb < 4096 -> "-Xmx768m"
+                totalMb < 6144 -> "-Xmx1024m"
+                totalMb < 8192 -> "-Xmx1536m"
+                else -> "-Xmx2048m"
+              }
+            }
+          }
+        }
+      }
+    } catch (_: Throwable) {}
+    val maxMem = Runtime.getRuntime().maxMemory() / (1024 * 1024)
+    return if (maxMem < 1024) "-Xmx768m" else "-Xmx1536m"
+  }
+
   @Suppress("NewApi")
   fun finalizeLauncher(launcher: ConfigurableLauncher<*>) {
     val out = LoggingOutputStream()
     launcher.setStandardError(out)
     launcher.setStandardOutput(out)
     launcher.setStandardInput(ByteArrayInputStream("NoOp".toByteArray(StandardCharsets.UTF_8)))
+
+    val adaptiveHeap = calculateAdaptiveDaemonHeap()
 
     // Ensure JVM platform encoding and locale are initialized before Gradle starts
     launcher.setJvmArguments(
@@ -142,9 +170,8 @@ object Main {
         "-Dsun.stdout.encoding=UTF-8",
         "-Dsun.stderr.encoding=UTF-8",
         "-Dnative.encoding=UTF-8",
-        "-Dorg.gradle.daemon.idletimeout=10800000",  // 3 hours in milliseconds
-        "-Dorg.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError",
-        
+        "-Dorg.gradle.daemon.idletimeout=180000",  // 3 minutes in milliseconds
+        "-Dorg.gradle.jvmargs=$adaptiveHeap -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError",
     )
 
     // Also enforce via environment for any forked JVM

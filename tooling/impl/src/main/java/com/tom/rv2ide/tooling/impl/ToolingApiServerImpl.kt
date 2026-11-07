@@ -137,8 +137,8 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
           return@runBuild InitializeResult(false, failureReason)
         }
 
-        // Ensure Gradle sees UTF-8/locale early via project gradle.properties
-        ensureProjectGradleProperties(projectDirectory)
+        // Clean execution: daemon arguments are passed via launcher JVM args without mutating user project files
+        // ensureProjectGradleProperties(projectDirectory)
 
         val stopWatch = StopWatch("Connection to project")
         val isReinitializing = connector != null && connection != null && params == lastInitParams
@@ -221,38 +221,8 @@ internal class ToolingApiServerImpl(private val project: ProjectImpl) : ITooling
   }
 
   private fun ensureProjectGradleProperties(projectDir: File) {
-    try {
-      val propsFile = File(projectDir, "gradle.properties")
-      val props = java.util.Properties()
-      if (propsFile.exists()) propsFile.inputStream().use { props.load(it) }
-
-      val jvmArgsKey = "org.gradle.jvmargs"
-      val enforced =
-          "-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Duser.language=en -Duser.country=US"
-      val current = props.getProperty(jvmArgsKey)?.trim().orEmpty()
-      if (!current.contains("file.encoding")) {
-        props.setProperty(jvmArgsKey, if (current.isBlank()) enforced else "$current $enforced")
-      }
-      props.setProperty("systemProp.file.encoding", "UTF-8")
-      props.setProperty("systemProp.sun.jnu.encoding", "UTF-8")
-      props.setProperty("systemProp.user.language", "en")
-      props.setProperty("systemProp.user.country", "US")
-      props.setProperty("org.gradle.daemon", "true")
-      props.setProperty("org.gradle.daemon.idletimeout", "10800000")  // 3 hours
-      props.setProperty("org.gradle.parallel", "true")
-
-      val memoryConfig = "-Xmx2048m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8"
-      val existingJvmArgs = props.getProperty(jvmArgsKey)?.trim().orEmpty()
-      if (!existingJvmArgs.contains("-Xmx")) {
-        props.setProperty(jvmArgsKey, memoryConfig)
-      }
-            
-      propsFile.outputStream().use { out ->
-        props.store(out, "AndroidCS: enforce UTF-8 & locale for Gradle daemon")
-      }
-    } catch (_: Throwable) {
-      // best-effort; ignore
-    }
+    // No-op: JVM args, memory, encoding, and daemon idle timeouts are safely
+    // passed via Tooling API launcher arguments without mutating user project files.
   }
 
   private fun validateProjectDirectory(projectDirectory: File) =

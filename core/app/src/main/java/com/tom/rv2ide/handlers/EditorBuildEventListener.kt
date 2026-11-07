@@ -89,8 +89,12 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
 
     override fun onOutput(line: String) {
       val act = _activity ?: return
-      act.runOnUiThread {
+      if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
         act.appendBuildOutput(line)
+      } else {
+        act.runOnUiThread {
+          act.appendBuildOutput(line)
+        }
       }
     }
 

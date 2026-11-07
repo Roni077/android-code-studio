@@ -15,13 +15,12 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 import com.tom.rv2ide.build.config.BuildConfig
 
 plugins {
     id("com.android.library")
     id("kotlin-android")
-    id("kotlin-kapt")
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -29,20 +28,17 @@ android {
 }
 
 dependencies {
-    kapt(libs.google.auto.service)
+    ksp(libs.auto.service.ksp)
 
     api(projects.utilities.lookup)
     api(projects.xml.resourcesApi)
 
     implementation(libs.common.kotlin)
     implementation(files(rootProject.file("composite-builds/build-deps/libs/jdt.jar")))
-    // implementation(libs.composite.jdt)
     implementation(files(rootProject.file("composite-builds/build-deps/libs/jaxp.jar")))
-    // implementation(libs.composite.jaxp)
-    implementation(libs.google.auto.service.annotations)
+    compileOnly(libs.google.auto.service.annotations)
 
     implementation(projects.core.common)
     implementation(projects.logging.logger)
     implementation(projects.xml.aaptcompiler)
-    
 }

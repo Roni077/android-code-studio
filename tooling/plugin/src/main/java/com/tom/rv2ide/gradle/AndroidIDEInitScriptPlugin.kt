@@ -66,7 +66,7 @@ class AndroidIDEInitScriptPlugin : Plugin<Gradle> {
           return@subprojects
         }
 
-        sub.afterEvaluate {
+        sub.pluginManager.withPlugin("com.android.base") {
           logger.info("Applying plugin '${BuildInfo.PACKAGE_NAME}' to project '${sub.path}'")
           sub.pluginManager.apply(BuildInfo.PACKAGE_NAME)
         }

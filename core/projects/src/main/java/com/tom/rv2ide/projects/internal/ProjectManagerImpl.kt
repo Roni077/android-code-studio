@@ -33,7 +33,7 @@ import com.tom.rv2ide.projects.CachingProject
 import com.tom.rv2ide.projects.IProjectManager
 import com.tom.rv2ide.projects.IWorkspace
 import com.tom.rv2ide.projects.ModuleProject
-import com.tom.rv2ide.projects.R
+import com.tom.rv2ide.resources.R
 import com.tom.rv2ide.projects.android.AndroidModule
 import com.tom.rv2ide.projects.builder.BuildService
 import com.tom.rv2ide.tasks.executeAsync

@@ -15,23 +15,21 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 import com.tom.rv2ide.build.config.BuildConfig
 
 plugins {
   id("com.android.library")
   id("org.jetbrains.kotlin.android")
-  id("kotlin-kapt")
+  alias(libs.plugins.ksp)
 }
-
-
 
 android {
   namespace = "${BuildConfig.packageName}.templates.impl"
 }
 
 dependencies {
-  kapt(libs.google.auto.service)
+  ksp(libs.auto.service.ksp)
+  compileOnly(libs.google.auto.service.annotations)
 
   api(projects.utilities.templatesApi)
 
@@ -43,6 +41,4 @@ dependencies {
 
   implementation(libs.androidx.annotation)
   implementation(libs.androidx.core.ktx)
-  implementation(libs.google.auto.service.annotations)
-
 }

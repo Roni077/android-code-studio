@@ -35,10 +35,10 @@ abstract class BaseIDEActivity : AppCompatActivity() {
   open var enableSystemBarTheming: Boolean = true
 
   open val navigationBarColor: Int
-    get() = resolveAttr(R.attr.colorSurface)
+    get() = resolveAttr(com.google.android.material.R.attr.colorSurface)
 
   open val statusBarColor: Int
-    get() = resolveAttr(R.attr.colorSurface)
+    get() = resolveAttr(com.google.android.material.R.attr.colorSurface)
 
   /** [CoroutineScope] for executing tasks with the [Default][Dispatchers.Default] dispatcher. */
   val activityScope = CoroutineScope(Dispatchers.Default)

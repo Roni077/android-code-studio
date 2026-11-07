@@ -106,7 +106,7 @@ open class BaseFragment @JvmOverloads constructor(contentLayoutId: Int = 0) :
     try {
       this.startForResult.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
     } catch (e: Exception) {
-      requireActivity().flashError(getString(R.string.msg_dir_picker_failed, e.message))
+      requireActivity().flashError(getString(com.tom.rv2ide.resources.R.string.msg_dir_picker_failed, e.message))
     }
   }
 

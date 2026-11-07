@@ -48,8 +48,8 @@ const val COLOR_INFO = Color.DKGRAY
 fun Activity.flashbarBuilder(
     gravity: Flashbar.Gravity = TOP,
     duration: Long = DURATION_SHORT,
-    backgroundColor: Int = resolveAttr(R.attr.colorPrimaryContainer),
-    messageColor: Int = resolveAttr(R.attr.colorOnPrimaryContainer),
+    backgroundColor: Int = resolveAttr(com.google.android.material.R.attr.colorPrimaryContainer),
+    messageColor: Int = resolveAttr(com.google.android.material.R.attr.colorOnPrimaryContainer),
 ): Flashbar.Builder {
   return Flashbar.Builder(this)
       .gravity(gravity)

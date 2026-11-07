@@ -73,6 +73,7 @@ import java.lang.Thread.UncaughtExceptionHandler
 import java.time.Duration
 import kotlin.system.exitProcess
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
@@ -151,8 +152,10 @@ class IDEApplication : TermuxApplication() {
 
     // Initialize memory management
     // initializeMemoryManagement()
-    extractLoggerRuntime()
-    extractJetbrainsMono()
+    GlobalScope.launch(Dispatchers.IO) {
+      extractLoggerRuntime()
+      extractJetbrainsMono()
+    }
 
     // Initialize Flutter language & module support
     FlutterModuleInitializer.init()
@@ -245,11 +248,14 @@ class IDEApplication : TermuxApplication() {
   private fun extractJetbrainsMono() {
     try {
       val fontsDir = File(Environment.HOME, ".androidide/ui")
+      val targetFont = File(fontsDir, "jetbrains-mono.ttf")
+      if (targetFont.exists() && targetFont.length() > 0L) {
+        return
+      }
 
       if (!fontsDir.exists()) {
         fontsDir.mkdirs()
       }
-      val targetFont = File(fontsDir, "jetbrains-mono.ttf")
 
       assets.open("fonts/jetbrains-mono.ttf").use { input ->
         FileOutputStream(targetFont).use { output -> input.copyTo(output) }
@@ -262,13 +268,15 @@ class IDEApplication : TermuxApplication() {
   private fun extractLoggerRuntime() {
     try {
       val pluginsDir = File(Environment.HOME, "plugins/logger")
+      val targetFile = File(pluginsDir, "logger-runtime.aar")
+      if (targetFile.exists() && targetFile.length() > 0L) {
+        return
+      }
 
       if (!pluginsDir.exists()) {
         pluginsDir.mkdirs()
         log.info("Created directory: ${pluginsDir.absolutePath}")
       }
-
-      val targetFile = File(pluginsDir, "logger-runtime.aar")
 
       assets.open("logger-runtime.aar").use { input ->
         FileOutputStream(targetFile).use { output -> input.copyTo(output) }

@@ -88,7 +88,7 @@ public class ColorPickerView extends LinearLayout {
   public ColorPickerView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
     super(context, attrs, defStyleAttr, defStyleRes);
 
-    this.DEFAULT_COLOR = ContextCompat.getColor(context, R.color.color_picker_default_color);
+    this.DEFAULT_COLOR = ContextCompat.getColor(context, com.tom.rv2ide.resources.R.color.color_picker_default_color);
 
     this.binding = LayoutColorPickerBinding.inflate(LayoutInflater.from(context));
 

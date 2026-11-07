@@ -211,10 +211,13 @@ object ToolingApiLauncher {
       `in`: InputStream?,
       out: OutputStream?,
   ): Launcher<Any> {
+    val boundedExecutor = Executors.newFixedThreadPool(4) { runnable ->
+      Thread(runnable, "ToolingApi-IPC").apply { isDaemon = true }
+    }
     return Launcher.Builder<Any>()
         .setInput(`in`)
         .setOutput(out)
-        .setExecutorService(Executors.newCachedThreadPool())
+        .setExecutorService(boundedExecutor)
         .setLocalServices(listOf(*locals))
         .setRemoteInterfaces(listOf(*remotes))
         .configureGson { configureGson(it) }

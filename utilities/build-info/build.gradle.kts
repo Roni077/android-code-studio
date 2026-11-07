@@ -15,15 +15,19 @@
  *   along with AndroidIDE.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 import com.android.SdkConstants
 import com.tom.rv2ide.build.config.AGP_VERSION_MINIMUM
 import com.tom.rv2ide.build.config.BuildConfig
 import com.tom.rv2ide.build.config.ProjectConfig
-import com.tom.rv2ide.build.config.VersionUtils
-import com.tom.rv2ide.build.config.downloadVersion
 import com.tom.rv2ide.build.config.replaceContents
 import com.tom.rv2ide.build.config.simpleVersionName
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.TaskAction
 
 plugins {
   //noinspection JavaPluginLanguageLevel
@@ -32,47 +36,72 @@ plugins {
 
 description = "Information about the AndroidIDE build"
 
-val buildInfoGenDir: Provider<Directory> = project.layout.buildDirectory.dir("generated/buildInfo")
-  .also { 
-    val dir = it.get().asFile
-    if (!dir.exists()) {
-      dir.mkdirs()
-    }
-  }
+abstract class GenerateBuildInfoTask : DefaultTask() {
 
-sourceSets { getByName("main").java.srcDir(buildInfoGenDir) }
+  @get:InputFile
+  abstract val templateFile: RegularFileProperty
 
-tasks.create("generateBuildInfo") {
-  val buildInfoPath = "com/tom/rv2ide/buildinfo/BuildInfo.java"
-  val buildInfo = buildInfoGenDir.get().file(buildInfoPath)
-  val buildInfoIn = project.file("src/main/java/${buildInfoPath}.in")
+  @get:OutputFile
+  abstract val destinationFile: RegularFileProperty
 
-  doLast {
-    buildInfoIn.replaceContents(
-      dest = buildInfo.asFile,
+  @get:Input
+  abstract val packageName: Property<String>
+
+  @get:Input
+  abstract val versionName: Property<String>
+
+  @get:Input
+  abstract val simpleVersionName: Property<String>
+
+  @get:Input
+  abstract val downloadVersion: Property<String>
+
+  @get:Input
+  abstract val agpToolingVersion: Property<String>
+
+  @TaskAction
+  fun generate() {
+    val dest = destinationFile.get().asFile
+    dest.parentFile.mkdirs()
+    val candidates = arrayOf(
+      "PACKAGE_NAME" to packageName.get(),
+      "MVN_GROUP_ID" to "io.github.mohammed-baqer-null",
+      "VERSION_NAME" to versionName.get(),
+      "VERSION_NAME_SIMPLE" to simpleVersionName.get(),
+      "VERSION_NAME_DOWNLOAD" to downloadVersion.get(),
+      "REPO_HOST" to ProjectConfig.REPO_HOST,
+      "REPO_OWNER" to ProjectConfig.REPO_OWNER,
+      "REPO_NAME" to ProjectConfig.REPO_NAME,
+      "PROJECT_SITE" to ProjectConfig.PROJECT_SITE,
+      "AGP_VERSION_MININUM" to AGP_VERSION_MINIMUM,
+      "AGP_VERSION_LATEST" to agpToolingVersion.get(),
+      "AGP_VERSION_GRADLE_LATEST" to SdkConstants.GRADLE_LATEST_VERSION
+    )
+    templateFile.get().asFile.replaceContents(
+      dest = dest,
       comment = "//",
-      candidates =
-      arrayOf(
-        "PACKAGE_NAME" to BuildConfig.packageName,
-        // "MVN_GROUP_ID" to BuildConfig.packageName,
-        "MVN_GROUP_ID" to "io.github.mohammed-baqer-null",
-
-        "VERSION_NAME" to rootProject.version.toString(),
-        "VERSION_NAME_SIMPLE" to rootProject.simpleVersionName,
-        "VERSION_NAME_DOWNLOAD" to rootProject.downloadVersion,
-
-        "REPO_HOST" to ProjectConfig.REPO_HOST,
-        "REPO_OWNER" to ProjectConfig.REPO_OWNER,
-        "REPO_NAME" to ProjectConfig.REPO_NAME,
-        "PROJECT_SITE" to ProjectConfig.PROJECT_SITE,
-
-        "AGP_VERSION_MININUM" to AGP_VERSION_MINIMUM,
-        "AGP_VERSION_LATEST" to libs.versions.agp.tooling.get(),
-        "AGP_VERSION_GRADLE_LATEST" to SdkConstants.GRADLE_LATEST_VERSION
-      )
+      candidates = candidates
     )
   }
 }
 
-tasks.withType<JavaCompile> { dependsOn("generateBuildInfo") }
-tasks.withType<Jar> { dependsOn("generateBuildInfo") }
+val buildInfoGenDir: Provider<Directory> = project.layout.buildDirectory.dir("generated/buildInfo")
+
+sourceSets { getByName("main").java.srcDir(buildInfoGenDir) }
+
+val buildInfoPath = "com/tom/rv2ide/buildinfo/BuildInfo.java"
+val buildInfoInFile = layout.projectDirectory.file("src/main/java/${buildInfoPath}.in")
+val buildInfoOutFile = buildInfoGenDir.map { it.file(buildInfoPath) }
+
+val generateTask = tasks.register("generateBuildInfo", GenerateBuildInfoTask::class.java) {
+  templateFile.set(buildInfoInFile)
+  destinationFile.set(buildInfoOutFile)
+  packageName.set(BuildConfig.packageName)
+  versionName.set(rootProject.version.toString())
+  simpleVersionName.set(rootProject.simpleVersionName)
+  downloadVersion.set("1.0.0")
+  agpToolingVersion.set(libs.versions.agp.tooling.get())
+}
+
+tasks.withType<JavaCompile>().configureEach { dependsOn(generateTask) }
+tasks.withType<Jar>().configureEach { dependsOn(generateTask) }

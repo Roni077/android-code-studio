@@ -31,8 +31,8 @@ plugins {
   alias(libs.plugins.kotlin.jvm) apply false
   alias(libs.plugins.protobuf) apply false
   alias(libs.plugins.benchmark) apply false
+  alias(libs.plugins.ksp) apply false
   id("org.jetbrains.kotlin.plugin.serialization") version "1.9.10" apply false
-  
 }
 
 buildscript {
@@ -53,26 +53,24 @@ subprojects {
     project.group = group
   }
 
-  afterEvaluate {
-    apply { plugin(AndroidIDEPlugin::class.java) }
-  }
-
   project.version = rootProject.version
 
   plugins.withId("com.android.application") {
+    pluginManager.apply(AndroidIDEPlugin::class.java)
     configureAndroidModule(libs.androidx.libDesugaring)
   }
   plugins.withId("com.android.library") {
+    pluginManager.apply(AndroidIDEPlugin::class.java)
     configureAndroidModule(libs.androidx.libDesugaring)
   }
   plugins.withId("java-library") { configureJavaModule() }
 
-tasks.withType<KotlinCompile>().configureEach {
-  compilerOptions {
-    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(BuildConfig.javaVersion.toString()))
-    freeCompilerArgs.addAll("-Xstring-concat=inline")
+  tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions {
+      jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(BuildConfig.javaVersion.toString()))
+      freeCompilerArgs.addAll("-Xstring-concat=inline")
+    }
   }
-}
 
   tasks.configureEach {
     if (name.startsWith("verify") && name.endsWith("Resources")) {

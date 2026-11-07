@@ -46,6 +46,9 @@ tasks.configureEach {
     if (name.startsWith("l8DexDesugarLib", ignoreCase = true)) {
         enabled = false
     }
+    if (name.startsWith("kapt", ignoreCase = true)) {
+        mustRunAfter(":tooling:impl:copyJar")
+    }
 }
 
 configurations.all {

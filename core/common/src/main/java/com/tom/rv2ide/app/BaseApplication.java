@@ -229,7 +229,7 @@ public class BaseApplication extends Application {
       if (pkg != null) {
         openUrl(url);
       } else if (th instanceof ActivityNotFoundException) {
-        FlashbarUtilsKt.flashError(R.string.msg_app_unavailable_for_intent);
+        FlashbarUtilsKt.flashError(com.tom.rv2ide.resources.R.string.msg_app_unavailable_for_intent);
       } else {
         FlashbarUtilsKt.flashError(th.getMessage());
       }

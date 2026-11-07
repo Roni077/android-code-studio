@@ -85,7 +85,7 @@ inline fun <T> Context.executeWithProgress(
     block: (ProgressDialog) -> T,
 ): T {
   val dialog = ProgressDialog(this)
-  dialog.setMessage(getString(R.string.please_wait))
+  dialog.setMessage(getString(com.tom.rv2ide.resources.R.string.please_wait))
   dialog.setCancelable(cancellable)
   dialog.show()
   return block(dialog)

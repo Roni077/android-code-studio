@@ -47,16 +47,13 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
     "${javaClass.simpleName} can only be applied to Android projects"
   }
 
-  val androidJar =
-      extensions
-          .getByType(AndroidComponentsExtension::class.java)
-          .getAndroidJar(assertExists = true)
-  val frameworkStubsJar =
-      findProject(":utilities:framework-stubs")!!.file("libs/android.jar").also {
-        it.parentFile.mkdirs()
-      }
-
-  if (!(frameworkStubsJar.exists() && frameworkStubsJar.isFile)) {
+  val frameworkStubsJar = rootProject.file("utilities/framework-stubs/libs/android.jar")
+  if (!frameworkStubsJar.exists()) {
+    val androidJar =
+        extensions
+            .getByType(AndroidComponentsExtension::class.java)
+            .getAndroidJar(assertExists = true)
+    frameworkStubsJar.parentFile.mkdirs()
     androidJar.copyTo(frameworkStubsJar)
   }
 
@@ -163,12 +160,13 @@ fun Project.configureAndroidModule(coreLibDesugDep: Provider<MinimalExternalModu
 
     buildTypes.getByName("debug") { isMinifyEnabled = false }
     buildTypes.getByName("release") {
-
-      // from AGP 8.4.0 onwards, there are some behavioral changes in R8
-      // enabling R8 on library projects results in missing class errors
-      // see https://issuetracker.google.com/issues/338411137#comment11
-      isMinifyEnabled = false
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      if (isAppModule) {
+        isMinifyEnabled = true
+        proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      } else {
+        isMinifyEnabled = false
+        consumerProguardFiles("consumer-rules.pro")
+      }
     }
 
     // development build type

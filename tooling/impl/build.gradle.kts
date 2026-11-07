@@ -22,7 +22,7 @@ import com.tom.rv2ide.build.config.BuildConfig
 plugins {
   id("com.github.johnrengelman.shadow") version "8.1.1"
   id("java-library")
-  id("kotlin-kapt")
+  alias(libs.plugins.ksp)
   id("org.jetbrains.kotlin.jvm")
 }
 
@@ -32,31 +32,25 @@ tasks.withType<Jar> {
   manifest { attributes("Main-Class" to "${BuildConfig.packageName}.tooling.impl.Main") }
 }
 
-tasks.register("deleteExistingJarFiles") {
-  delete {
-    delete(project.layout.buildDirectory.dir("libs"))
-  }
+tasks.register<Delete>("deleteExistingJarFiles") {
+  delete(layout.buildDirectory.dir("libs"))
 }
 
-tasks.register("copyJar") {
-  doLast {
-    val libsDir = project.layout.buildDirectory.dir("libs")
-
-    copy {
-      from(libsDir)
-      into(libsDir)
-      include("*-all.jar")
-      rename { "tooling-api-all.jar" }
-    }
-  }
+tasks.register<Copy>("copyJar") {
+  dependsOn("shadowJar")
+  val libsDir = layout.buildDirectory.dir("libs")
+  from(libsDir)
+  into(libsDir)
+  include("*-all.jar")
+  rename { "tooling-api-all.jar" }
 }
 
-project.tasks.getByName("jar") {
+tasks.named("jar").configure {
   dependsOn("deleteExistingJarFiles")
   finalizedBy("shadowJar")
 }
 
-project.tasks.getByName("shadowJar") {
+tasks.named("shadowJar").configure {
   finalizedBy("copyJar")
 }
 
@@ -64,7 +58,8 @@ dependencies {
 
   implementation("io.hotmoka:toml4j:0.7.3")
   
-  kapt(libs.google.auto.service)
+  ksp(libs.auto.service.ksp)
+  compileOnly(libs.google.auto.service.annotations)
 
   api(projects.tooling.api)
 
@@ -72,7 +67,6 @@ dependencies {
   implementation(projects.utilities.shared)
 
   implementation(libs.common.jkotlin)
-  implementation(libs.google.auto.service.annotations)
   implementation(libs.xml.xercesImpl)
   implementation(libs.xml.apis)
   implementation(libs.tooling.gradleApi)

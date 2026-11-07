@@ -22,6 +22,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 
 import com.blankj.utilcode.util.FileUtils;
+import com.tom.rv2ide.tasks.TaskExecutor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,23 +79,22 @@ public final class Environment {
 
     public static void init(Context context) {
         ROOT = context.getFilesDir();
-        PREFIX = mkdirIfNotExits(new File(ROOT, "usr"));
-        HOME = mkdirIfNotExits(new File(ROOT, "home"));
-        ANDROIDIDE_HOME = mkdirIfNotExits(new File(HOME, ".androidide"));
+        PREFIX = new File(ROOT, "usr");
+        HOME = new File(ROOT, "home");
+        ANDROIDIDE_HOME = new File(HOME, ".androidide");
         // ANDROIDIDE_PREFIX = mkdirIfNotExits(new File(HOME, PREFIX.getName()));
         TMP_DIR = ensureTmpDir();
-        BIN_DIR = mkdirIfNotExits(new File(PREFIX, "bin"));
-        LIB_DIR = mkdirIfNotExits(new File(PREFIX, "lib"));
-        PROJECTS_DIR = mkdirIfNotExits(new File(FileUtil.getExternalStorageDir(), PROJECTS_FOLDER));
-        AT_ACSHOME_PROJECTS = mkdirIfNotExits(new File(HOME, "ACSProjects"));
-        ANDROID_JAR = mkdirIfNotExits(new File(ANDROIDIDE_HOME, "android.jar"));
-        TOOLING_API_JAR = new File(mkdirIfNotExits(new File(ANDROIDIDE_HOME, "tooling-api")),
-        "tooling-api-all.jar");
+        BIN_DIR = new File(PREFIX, "bin");
+        LIB_DIR = new File(PREFIX, "lib");
+        PROJECTS_DIR = new File(FileUtil.getExternalStorageDir(), PROJECTS_FOLDER);
+        AT_ACSHOME_PROJECTS = new File(HOME, "ACSProjects");
+        ANDROID_JAR = new File(ANDROIDIDE_HOME, "android.jar");
+        TOOLING_API_JAR = new File(new File(ANDROIDIDE_HOME, "tooling-api"), "tooling-api-all.jar");
         AAPT2 = new File(ANDROIDIDE_HOME, "aapt2");
-        ANDROIDIDE_UI = mkdirIfNotExits(new File(ANDROIDIDE_HOME, "ui"));
-        REALM_DB_DIR = mkdirIfNotExits(new File(ROOT, "realm-dbs"));
+        ANDROIDIDE_UI = new File(ANDROIDIDE_HOME, "ui");
+        REALM_DB_DIR = new File(ROOT, "realm-dbs");
 
-        INIT_SCRIPT = new File(mkdirIfNotExits(new File(ANDROIDIDE_HOME, "init")), "init.gradle");
+        INIT_SCRIPT = new File(new File(ANDROIDIDE_HOME, "init"), "init.gradle");
         GRADLE_USER_HOME = new File(HOME, ".gradle");
 
         ANDROID_HOME = new File(HOME, "android-sdk");
@@ -109,13 +109,13 @@ public final class Environment {
         LOGIN_SHELL = new File(BIN_DIR, "login");
 
         // Server locations
-        SERVERS_DIR = mkdirIfNotExits(new File(HOME, "acs/servers"));
-        SERVERS_C_CPP_DIR = mkdirIfNotExits(new File(HOME, "acs/servers/c_cpp/server"));
-        SERVERS_KOTLIN_DIR = mkdirIfNotExits(new File(HOME, "acs/servers/kotlin/server"));
-        SERVER_CONFIG_DIR = mkdirIfNotExits(new File(HOME, ".config/kotlin-language-server"));
+        SERVERS_DIR = new File(HOME, "acs/servers");
+        SERVERS_C_CPP_DIR = new File(HOME, "acs/servers/c_cpp/server");
+        SERVERS_KOTLIN_DIR = new File(HOME, "acs/servers/kotlin/server");
+        SERVER_CONFIG_DIR = new File(HOME, ".config/kotlin-language-server");
         
         // ACS
-        ACSIDE = createFileIfNotExists(new File(PREFIX, "share/acside.properties"));
+        ACSIDE = new File(PREFIX, "share/acside.properties");
 
         // Flutter & Dart paths
         FLUTTER_HOME = new File(PREFIX, "opt/flutter");
@@ -123,27 +123,52 @@ public final class Environment {
         DART_SDK = new File(FLUTTER_HOME, "bin/cache/dart-sdk");
         DART_BIN = new File(DART_SDK, "bin/dart");
 
-        // Symlink $HOME/flutter-sdk -> FLUTTER_HOME for easier access within $HOME
-        File flutterSdkLink = new File(HOME, "flutter-sdk");
-        if (FLUTTER_HOME.exists()) {
-            if (!flutterSdkLink.exists()) {
+        System.setProperty("user.home", HOME.getAbsolutePath());
+
+        // Perform directory and environment setup asynchronously to avoid cold boot main-thread stalls
+        TaskExecutor.executeAsync(() -> {
+            mkdirIfNotExits(PREFIX);
+            mkdirIfNotExits(HOME);
+            mkdirIfNotExits(ANDROIDIDE_HOME);
+            mkdirIfNotExits(BIN_DIR);
+            mkdirIfNotExits(LIB_DIR);
+            mkdirIfNotExits(PROJECTS_DIR);
+            mkdirIfNotExits(AT_ACSHOME_PROJECTS);
+            mkdirIfNotExits(new File(ANDROIDIDE_HOME, "tooling-api"));
+            mkdirIfNotExits(ANDROIDIDE_UI);
+            mkdirIfNotExits(REALM_DB_DIR);
+            mkdirIfNotExits(new File(ANDROIDIDE_HOME, "init"));
+            mkdirIfNotExits(SERVERS_DIR);
+            mkdirIfNotExits(SERVERS_C_CPP_DIR);
+            mkdirIfNotExits(SERVERS_KOTLIN_DIR);
+            mkdirIfNotExits(SERVER_CONFIG_DIR);
+            createFileIfNotExists(ACSIDE);
+
+            // Symlink $HOME/flutter-sdk -> FLUTTER_HOME for easier access within $HOME
+            File flutterSdkLink = new File(HOME, "flutter-sdk");
+            if (FLUTTER_HOME.exists()) {
+                if (!flutterSdkLink.exists()) {
+                    try {
+                        android.system.Os.symlink(FLUTTER_HOME.getAbsolutePath(), flutterSdkLink.getAbsolutePath());
+                    } catch (Throwable t) {
+                        LOG.error("Failed to create symlink for flutter-sdk: {}", t.getMessage());
+                    }
+                }
                 try {
-                    android.system.Os.symlink(FLUTTER_HOME.getAbsolutePath(), flutterSdkLink.getAbsolutePath());
+                    FlutterSdkSanitizer.sanitize(FLUTTER_HOME, PREFIX);
                 } catch (Throwable t) {
-                    LOG.error("Failed to create symlink for flutter-sdk: {}", t.getMessage());
+                    LOG.warn("Failed to auto-sanitize flutter-sdk: {}", t.getMessage());
                 }
             }
-            try {
-                FlutterSdkSanitizer.sanitize(FLUTTER_HOME, PREFIX);
-            } catch (Throwable t) {
-                LOG.warn("Failed to auto-sanitize flutter-sdk: {}", t.getMessage());
+
+            if (JAVA.exists()) {
+                setExecutable(JAVA);
             }
-        }
-
-        setExecutable(JAVA);
-        setExecutable(BASH_SHELL);
-
-        System.setProperty("user.home", HOME.getAbsolutePath());
+            if (BASH_SHELL.exists()) {
+                setExecutable(BASH_SHELL);
+            }
+            return null;
+        });
     }
 
     public static File ensureTmpDir() {

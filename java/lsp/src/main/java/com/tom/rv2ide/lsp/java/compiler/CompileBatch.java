@@ -204,6 +204,8 @@ public class CompileBatch implements AutoCloseable {
   @Override
   public void close() {
     closed = true;
+    roots.clear();
+    methodPositions.clear();
   }
 
   /**

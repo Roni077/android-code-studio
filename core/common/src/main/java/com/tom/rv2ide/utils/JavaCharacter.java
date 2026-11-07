@@ -17,74 +17,43 @@
  **************************************************************************************/
 package com.tom.rv2ide.utils;
 
-import java.util.Arrays;
-
 /**
- * @author Rose Get whether Identifier part/start quickly
+ * Fast Java identifier part/start character classification.
+ * Optimized with zero-allocation ASCII fast-paths and Unicode fallback.
  */
 public class JavaCharacter {
 
-  /** Compressed bit set for isJavaIdentifierStart() */
-  private static int[] state_start;
-
-  /** Compressed bit set for isJavaIdentifierPart() */
-  private static int[] state_part;
-
-  /** Init maps */
-  public static void initMap() {
-    if (state_start != null) {
-      return;
-    }
-    state_part = new int[2048];
-    state_start = new int[2048];
-    Arrays.fill(state_part, 0);
-    Arrays.fill(state_start, 0);
-    for (int i = 0; i <= 65535; i++) {
-      if (Character.isJavaIdentifierPart((char) i)) {
-        set(state_part, i);
-      }
-      if (Character.isJavaIdentifierStart((char) i)) {
-        set(state_start, i);
-      }
-    }
-  }
-
-  /**
-   * Make the given position's bit true
-   *
-   * @param values Compressed bit set
-   * @param bitIndex Index of bit
+  /** 
+   * Retained for backward binary compatibility. No-op since lookup is zero-allocation.
    */
-  private static void set(int[] values, int bitIndex) {
-    values[bitIndex / 32] |= (1 << (bitIndex % 32));
+  public static void initMap() {
+    // No-op
   }
 
   /**
    * @param key Character
-   * @return Whether a identifier part
+   * @return Whether an identifier part
    * @see Character#isJavaIdentifierPart(char)
    */
   public static boolean isJavaIdentifierPart(int key) {
-    return get(state_part, key);
-  }
-
-  /**
-   * Get bit in compressed bit set
-   *
-   * @param values Compressed bit set
-   * @param bitIndex Target index
-   * @return Boolean value at the index
-   */
-  private static boolean get(int[] values, int bitIndex) {
-    return ((values[bitIndex / 32] & (1 << (bitIndex % 32))) != 0);
+    if (key >= 'a' && key <= 'z') return true;
+    if (key >= 'A' && key <= 'Z') return true;
+    if (key >= '0' && key <= '9') return true;
+    if (key == '_' || key == '$') return true;
+    if (key < 128 || key > 65535) return false;
+    return Character.isJavaIdentifierPart((char) key);
   }
 
   /**
    * @param key Character
-   * @return Whether a identifier start
+   * @return Whether an identifier start
    * @see Character#isJavaIdentifierStart(char)
    */
   public static boolean isJavaIdentifierStart(int key) {
-    return get(state_start, key);
+    if (key >= 'a' && key <= 'z') return true;
+    if (key >= 'A' && key <= 'Z') return true;
+    if (key == '_' || key == '$') return true;
+    if (key < 128 || key > 65535) return false;
+    return Character.isJavaIdentifierStart((char) key);
   }
 }
