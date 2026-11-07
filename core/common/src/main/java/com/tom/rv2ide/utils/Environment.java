@@ -71,6 +71,11 @@ public final class Environment {
 
     public static File ACSIDE;
 
+    // Termux
+    public static File TERMUX_DIR;
+    public static File TERMUX_FONTS_DIR;
+    public static File TERMUX_FONT_FILE;
+
     // Flutter & Dart
     public static File FLUTTER_HOME;
     public static File FLUTTER_BIN;
@@ -117,6 +122,11 @@ public final class Environment {
         // ACS
         ACSIDE = new File(PREFIX, "share/acside.properties");
 
+        // Termux paths
+        TERMUX_DIR = new File(HOME, ".termux");
+        TERMUX_FONTS_DIR = new File(TERMUX_DIR, "fonts");
+        TERMUX_FONT_FILE = new File(TERMUX_DIR, "font.ttf");
+
         // Flutter & Dart paths
         FLUTTER_HOME = new File(PREFIX, "opt/flutter");
         FLUTTER_BIN = new File(FLUTTER_HOME, "bin/flutter");
@@ -136,6 +146,8 @@ public final class Environment {
             mkdirIfNotExits(AT_ACSHOME_PROJECTS);
             mkdirIfNotExits(new File(ANDROIDIDE_HOME, "tooling-api"));
             mkdirIfNotExits(ANDROIDIDE_UI);
+            mkdirIfNotExits(TERMUX_DIR);
+            mkdirIfNotExits(TERMUX_FONTS_DIR);
             mkdirIfNotExits(REALM_DB_DIR);
             mkdirIfNotExits(new File(ANDROIDIDE_HOME, "init"));
             mkdirIfNotExits(SERVERS_DIR);

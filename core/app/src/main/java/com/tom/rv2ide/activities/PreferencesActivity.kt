@@ -45,6 +45,7 @@ import com.tom.rv2ide.preferences.IDEPreferences as prefs
 import com.tom.rv2ide.preferences.addRootPreferences
 import androidx.appcompat.app.AppCompatDelegate
 import com.tom.rv2ide.utils.Environment
+import com.tom.rv2ide.utils.TypefaceUtils
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -352,26 +353,53 @@ class PreferencesActivity :
   override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
     super.onActivityResult(requestCode, resultCode, data)
 
-    if (requestCode == 1001 && resultCode == Activity.RESULT_OK) {
-      data?.data?.let { uri ->
-        try {
-          val fontDir = File("${Environment.HOME}/.androidide/ui")
-          if (!fontDir.exists()) {
-            fontDir.mkdirs()
-          }
-
-          val fileName = getFileName(uri) ?: "custom_font.ttf"
-          val destFile = File(fontDir, fileName)
-
-          contentResolver.openInputStream(uri)?.use { input ->
-            destFile.outputStream().use { output ->
-              input.copyTo(output)
+    if (resultCode == Activity.RESULT_OK) {
+      if (requestCode == 1001) {
+        data?.data?.let { uri ->
+          try {
+            val fontDir = Environment.ANDROIDIDE_UI ?: File(Environment.HOME, ".androidide/ui")
+            if (!fontDir.exists()) {
+              fontDir.mkdirs()
             }
-          }
 
-          Toast.makeText(this, "Font copied successfully: $fileName", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-          Toast.makeText(this, "Error copying font: ${e.message}", Toast.LENGTH_LONG).show()
+            val fileName = getFileName(uri) ?: "custom_font.ttf"
+            val destFile = File(fontDir, fileName)
+
+            contentResolver.openInputStream(uri)?.use { input ->
+              destFile.outputStream().use { output ->
+                input.copyTo(output)
+              }
+            }
+
+            Toast.makeText(this, "Font copied successfully: $fileName", Toast.LENGTH_SHORT).show()
+          } catch (e: Exception) {
+            Toast.makeText(this, "Error copying font: ${e.message}", Toast.LENGTH_LONG).show()
+          }
+        }
+      } else if (requestCode == 1002) {
+        data?.data?.let { uri ->
+          try {
+            val termuxFontsDir = TypefaceUtils.getTermuxFontsDir()
+            if (!termuxFontsDir.exists()) {
+              termuxFontsDir.mkdirs()
+            }
+
+            val fileName = getFileName(uri) ?: "custom_font.ttf"
+            val destFile = File(termuxFontsDir, fileName)
+
+            contentResolver.openInputStream(uri)?.use { input ->
+              destFile.outputStream().use { output ->
+                input.copyTo(output)
+              }
+            }
+
+            TypefaceUtils.selectedTerminalCustomFont = fileName
+            TypefaceUtils.applyTerminalFont(fileName)
+
+            Toast.makeText(this, "Terminal font copied and applied: $fileName", Toast.LENGTH_SHORT).show()
+          } catch (e: Exception) {
+            Toast.makeText(this, "Error copying terminal font: ${e.message}", Toast.LENGTH_LONG).show()
+          }
         }
       }
     }

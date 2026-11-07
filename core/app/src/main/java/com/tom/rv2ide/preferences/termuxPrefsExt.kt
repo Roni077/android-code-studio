@@ -264,17 +264,13 @@ class UseTerminalCustomFont(
 ) : SingleChoicePreference() {
 
   companion object {
-    const val PICK_FONT_REQUEST = 1001
+    const val PICK_FONT_REQUEST = 1002
   }
 
   @IgnoredOnParcel override val dialogCancellable = true
 
   override fun getEntries(preference: Preference): Array<PreferenceChoices.Entry> {
-    val fontDir = File("${Environment.HOME}/.androidide/ui")
-    val fontFiles = fontDir.listFiles { file ->
-      file.extension.lowercase() in listOf("ttf", "otf")
-    }?.map { it.name }?.sorted() ?: emptyList()
-
+    val fontFiles = TypefaceUtils.getAvailableTerminalFonts()
     val currentFont = TypefaceUtils.selectedTerminalCustomFont
 
     val entries = mutableListOf<PreferenceChoices.Entry>()
@@ -319,10 +315,13 @@ class UseTerminalCustomFont(
       }
       null, "" -> {
         TypefaceUtils.selectedTerminalCustomFont = null
+        TypefaceUtils.applyTerminalFont(null)
         Toast.makeText(preference.context, "Using default terminal font", Toast.LENGTH_SHORT).show()
       }
       else -> {
-        TypefaceUtils.selectedTerminalCustomFont = entry.data as String
+        val fontName = entry.data as String
+        TypefaceUtils.selectedTerminalCustomFont = fontName
+        TypefaceUtils.applyTerminalFont(fontName)
         Toast.makeText(preference.context, "Terminal font selected: ${entry.label}", Toast.LENGTH_SHORT).show()
       }
     }

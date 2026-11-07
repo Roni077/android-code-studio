@@ -22,6 +22,16 @@ fun customOrJBMono(useCustom: Boolean = true): Typeface = TypefaceUtils.customOr
 
 fun getAvailableCustomFonts(): List<String> = TypefaceUtils.getAvailableCustomFonts()
 
+fun getAvailableTerminalFonts(): List<String> = TypefaceUtils.getAvailableTerminalFonts()
+
+fun applyTerminalFont(fontName: String?): Boolean = TypefaceUtils.applyTerminalFont(fontName)
+
+fun getTermuxDir(): File = TypefaceUtils.getTermuxDir()
+
+fun getTermuxFontsDir(): File = TypefaceUtils.getTermuxFontsDir()
+
+fun getTermuxFontFile(): File = TypefaceUtils.getTermuxFontFile()
+
 var selectedCustomFont: String?
     get() = TypefaceUtils.selectedCustomFont
     set(value) {
@@ -79,6 +89,101 @@ object TypefaceUtils {
             ?: emptyList()
     }
 
+    @JvmStatic
+    fun getTermuxDir(): File {
+        return Environment.TERMUX_DIR ?: File(
+            Environment.HOME ?: File(BaseApplication.getBaseInstance().filesDir, "home"),
+            ".termux"
+        )
+    }
+
+    @JvmStatic
+    fun getTermuxFontsDir(): File {
+        val fontsDir = Environment.TERMUX_FONTS_DIR ?: File(getTermuxDir(), "fonts")
+        if (!fontsDir.exists()) {
+            fontsDir.mkdirs()
+        }
+        return fontsDir
+    }
+
+    @JvmStatic
+    fun getTermuxFontFile(): File {
+        return Environment.TERMUX_FONT_FILE ?: File(getTermuxDir(), "font.ttf")
+    }
+
+    @JvmStatic
+    fun getAvailableTerminalFonts(): List<String> {
+        val fonts = linkedSetOf<String>()
+        val searchDirs = listOfNotNull(
+            getTermuxFontsDir(),
+            getTermuxDir(),
+            Environment.ANDROIDIDE_UI
+        )
+
+        for (dir in searchDirs) {
+            if (dir.exists() && dir.isDirectory) {
+                dir.listFiles { file ->
+                    val ext = file.extension.lowercase()
+                    (ext == "ttf" || ext == "otf") && file.name != "font.ttf"
+                }?.forEach { file ->
+                    fonts.add(file.name)
+                }
+            }
+        }
+
+        return fonts.sorted()
+    }
+
+    @JvmStatic
+    fun applyTerminalFont(fontName: String?): Boolean {
+        val targetFile = getTermuxFontFile()
+        val targetDir = targetFile.parentFile
+        if (targetDir != null && !targetDir.exists()) {
+            targetDir.mkdirs()
+        }
+
+        if (fontName.isNullOrEmpty()) {
+            try {
+                if (targetFile.exists()) {
+                    targetFile.delete()
+                }
+                return true
+            } catch (e: Exception) {
+                return false
+            }
+        }
+
+        val searchDirs = listOfNotNull(
+            getTermuxFontsDir(),
+            getTermuxDir(),
+            Environment.ANDROIDIDE_UI
+        )
+
+        var sourceFile: File? = null
+        for (dir in searchDirs) {
+            val candidate = File(dir, fontName)
+            if (candidate.exists() && candidate.isFile && candidate.length() > 0) {
+                sourceFile = candidate
+                break
+            }
+        }
+
+        if (sourceFile == null) {
+            return false
+        }
+
+        return try {
+            sourceFile.inputStream().use { input ->
+                targetFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     var selectedCustomFont: String?
         get() = prefs.getString(SELECTED_CUSTOM_FONT, null)
         set(value) {
@@ -96,19 +201,31 @@ object TypefaceUtils {
         if (!useCustom) return jetbrainsMono()
 
         val selectedFont = selectedTerminalCustomFont
-        if (selectedFont.isNullOrEmpty()) {
-            val termuxFont = File("${Environment.HOME}/.termux/font.ttf")
-            if (termuxFont.exists() && termuxFont.isFile && termuxFont.length() > 0) {
-                return Typeface.createFromFile(termuxFont)
+        if (!selectedFont.isNullOrEmpty()) {
+            val searchDirs = listOfNotNull(
+                getTermuxFontsDir(),
+                getTermuxDir(),
+                Environment.ANDROIDIDE_UI
+            )
+            for (dir in searchDirs) {
+                val fontFile = File(dir, selectedFont)
+                if (fontFile.exists() && fontFile.isFile && fontFile.length() > 0) {
+                    try {
+                        return Typeface.createFromFile(fontFile)
+                    } catch (_: Exception) {
+                        // ignore and try next or fallback
+                    }
+                }
             }
-            return jetbrainsMono()
         }
 
-        val fontDir: File = Environment.ANDROIDIDE_UI
-        val fontFile = File(fontDir, selectedFont)
-
-        if (fontFile.exists() && fontFile.isFile && fontFile.length() > 0) {
-            return Typeface.createFromFile(fontFile)
+        val termuxFont = getTermuxFontFile()
+        if (termuxFont.exists() && termuxFont.isFile && termuxFont.length() > 0) {
+            try {
+                return Typeface.createFromFile(termuxFont)
+            } catch (_: Exception) {
+                // ignore and fall back to jetbrainsMono
+            }
         }
 
         return jetbrainsMono()

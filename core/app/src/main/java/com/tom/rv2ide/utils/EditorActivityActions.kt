@@ -41,12 +41,10 @@ import com.tom.rv2ide.actions.etc.PreviewLayoutAction
 import com.tom.rv2ide.actions.etc.ReloadColorSchemesAction
 import com.tom.rv2ide.actions.file.CloseAllFilesAction
 import com.tom.rv2ide.flutter.actions.FlutterAnalyzeAction
-import com.tom.rv2ide.flutter.actions.FlutterBuildApkAction
 import com.tom.rv2ide.flutter.actions.FlutterCleanAction
 import com.tom.rv2ide.flutter.actions.FlutterDoctorAction
 import com.tom.rv2ide.flutter.actions.FlutterPubGetAction
 import com.tom.rv2ide.flutter.actions.FlutterPubUpgradeAction
-import com.tom.rv2ide.flutter.actions.FlutterRunAction
 import com.tom.rv2ide.actions.file.CloseFileAction
 import com.tom.rv2ide.actions.file.CloseOtherFilesAction
 import com.tom.rv2ide.actions.file.FormatCodeAction
@@ -80,8 +78,6 @@ class EditorActivityActions {
       registry.registerAction(RedoAction(context, order++))
       registry.registerAction(QuickRunWithCancellationAction(context, order++))
       // Flutter toolbar actions
-      registry.registerAction(FlutterRunAction(context, order++))
-      registry.registerAction(FlutterBuildApkAction(context, order++))
       registry.registerAction(FlutterPubGetAction(context, order++))
       registry.registerAction(FlutterCleanAction(context, order++))
       registry.registerAction(FlutterPubUpgradeAction(context, order++))
