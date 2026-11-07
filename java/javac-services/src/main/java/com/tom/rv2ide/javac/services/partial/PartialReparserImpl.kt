@@ -171,10 +171,7 @@ class PartialReparserImpl : PartialReparser {
           }
         }
 
-        val arr = CharArray(fileContents.length)
-        for (index in fileContents.indices) {
-          arr[index] = fileContents[index]
-        }
+        val arr = fileContents.toString().toCharArray()
 
         buildLineMap(cu, arr)
         dl.endPartialReparse(delta)
@@ -220,9 +217,7 @@ class PartialReparserImpl : PartialReparser {
     val startPos = method.body.pos
     val body = CharArray(startPos + newBody.length + 1)
     Arrays.fill(body, ' ')
-    for (index in newBody.indices) {
-      body[startPos + index] = newBody[index]
-    }
+    System.arraycopy(newBody.toCharArray(), 0, body, startPos, newBody.length)
     body[startPos + newBody.length] = '\u0000'
     val buf = CharBuffer.wrap(body, 0, body.size - 1)
     val parser = newParser(context, buf, (cu as JCCompilationUnit).endPositions)

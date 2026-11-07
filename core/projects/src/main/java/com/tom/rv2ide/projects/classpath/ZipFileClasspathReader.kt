@@ -19,6 +19,7 @@ package com.tom.rv2ide.projects.classpath
 
 import com.google.common.collect.ImmutableSet
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
 
 /**
@@ -28,14 +29,28 @@ import java.util.zip.ZipFile
  */
 class ZipFileClasspathReader : IClasspathReader {
 
+  companion object {
+    private val classCache = ConcurrentHashMap<String, Pair<Long, ImmutableSet<ClassInfo>>>()
+  }
+
   override fun listClasses(files: Collection<File>): ImmutableSet<ClassInfo> {
     val classes = ImmutableSet.builder<ClassInfo>()
-    files.forEach {
-      if (!it.exists()) {
+    files.forEach { file ->
+      if (!file.exists()) {
         return@forEach
       }
 
-      ZipFile(it).use { zipFile ->
+      val lastModified = file.lastModified()
+      val path = file.absolutePath
+      val cached = classCache[path]
+
+      if (cached != null && cached.first == lastModified) {
+        classes.addAll(cached.second)
+        return@forEach
+      }
+
+      val fileClasses = ImmutableSet.builder<ClassInfo>()
+      ZipFile(file).use { zipFile ->
         for (entry in zipFile.entries()) {
           if (!entry.name.endsWith(".class")) {
             continue
@@ -54,9 +69,12 @@ class ZipFileClasspathReader : IClasspathReader {
             name = name.replace('/', '.')
           }
 
-          ClassInfo.create(name)?.also { classInfo -> classes.add(classInfo) }
+          ClassInfo.create(name)?.also { classInfo -> fileClasses.add(classInfo) }
         }
       }
+      val resultSet = fileClasses.build()
+      classCache[path] = Pair(lastModified, resultSet)
+      classes.addAll(resultSet)
     }
 
     return classes.build()

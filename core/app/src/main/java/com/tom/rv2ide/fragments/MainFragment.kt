@@ -25,6 +25,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -160,118 +161,129 @@ class MainFragment : BaseFragment() {
 
     recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
-    val projectDirProjects =
-        GeneralFileUtils.listDirsInDirectory(Environment.PROJECTS_DIR).filter {
-          isValidAndroidProject(it)
-        }
+    val appContext = requireContext().applicationContext
+    viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+      val projectDirProjects =
+          GeneralFileUtils.listDirsInDirectory(Environment.PROJECTS_DIR).filter {
+            isValidAndroidProject(it)
+          }
 
-    val recentProjectPaths = WizardPreferences.getRecentProjects(requireContext())
-    val recentProjectFiles =
-        recentProjectPaths.mapNotNull { path ->
-          val file = File(path)
-          if (file.exists() && file.isDirectory && isValidAndroidProject(file)) file else null
-        }
+      val recentProjectPaths = WizardPreferences.getRecentProjects(appContext)
+      val recentProjectFiles =
+          recentProjectPaths.mapNotNull { path ->
+            val file = File(path)
+            if (file.exists() && file.isDirectory && isValidAndroidProject(file)) file else null
+          }
 
-    val allProjectsMap = mutableMapOf<String, File>()
+      val allProjectsMap = mutableMapOf<String, File>()
 
-    recentProjectFiles.forEach { file -> allProjectsMap[file.absolutePath] = file }
+      recentProjectFiles.forEach { file -> allProjectsMap[file.absolutePath] = file }
 
-    projectDirProjects.forEach { file -> allProjectsMap[file.absolutePath] = file }
+      projectDirProjects.forEach { file -> allProjectsMap[file.absolutePath] = file }
 
-    val projectDirs =
-        allProjectsMap.values
-            .toList()
-            .sortedWith(
-                compareBy<File> { project ->
-                      val recentIndex = recentProjectPaths.indexOf(project.absolutePath)
-                      if (recentIndex >= 0) recentIndex else Int.MAX_VALUE
+      val projectDirs =
+          allProjectsMap.values
+              .toList()
+              .sortedWith(
+                  compareBy<File> { project ->
+                        val recentIndex = recentProjectPaths.indexOf(project.absolutePath)
+                        if (recentIndex >= 0) recentIndex else Int.MAX_VALUE
+                      }
+                      .thenByDescending { it.lastModified() }
+              )
+
+      withContext(Dispatchers.Main) {
+        if (!isAdded) return@withContext
+        var adapter: ProjectsListAdapter? = null
+
+        if (projectDirs.isEmpty()) {
+          recyclerView.visibility = View.GONE
+          emptyText.visibility = View.VISIBLE
+        } else {
+          recyclerView.visibility = View.VISIBLE
+          emptyText.visibility = View.GONE
+
+          adapter =
+              ProjectsListAdapter(
+                  projects = projectDirs,
+                  onProjectClick = { selectedDir ->
+                    bottomSheet.dismiss()
+                    openProject(selectedDir)
+                  },
+                  onProjectLongClick = { project ->
+                    showProjectOptionsDialog(project) {
+                      viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                        val updatedProjectDirProjects =
+                            GeneralFileUtils.listDirsInDirectory(Environment.PROJECTS_DIR).filter {
+                              isValidAndroidProject(it)
+                            }
+                        val updatedRecentProjectPaths =
+                            WizardPreferences.getRecentProjects(appContext)
+                        val updatedRecentProjectFiles =
+                            updatedRecentProjectPaths.mapNotNull { path ->
+                              val file = File(path)
+                              if (file.exists() && file.isDirectory && isValidAndroidProject(file)) file
+                              else null
+                            }
+
+                        val updatedAllProjectsMap = mutableMapOf<String, File>()
+                        updatedRecentProjectFiles.forEach { file ->
+                          updatedAllProjectsMap[file.absolutePath] = file
+                        }
+                        updatedProjectDirProjects.forEach { file ->
+                          updatedAllProjectsMap[file.absolutePath] = file
+                        }
+
+                        val updatedDirs =
+                            updatedAllProjectsMap.values
+                                .toList()
+                                .sortedWith(
+                                    compareBy<File> { proj ->
+                                          val recentIndex =
+                                              updatedRecentProjectPaths.indexOf(proj.absolutePath)
+                                          if (recentIndex >= 0) recentIndex else Int.MAX_VALUE
+                                        }
+                                        .thenByDescending { it.lastModified() }
+                                )
+
+                        withContext(Dispatchers.Main) {
+                          if (!isAdded) return@withContext
+                          adapter?.updateProjects(updatedDirs)
+
+                          if (updatedDirs.isEmpty()) {
+                            recyclerView.visibility = View.GONE
+                            emptyText.visibility = View.VISIBLE
+                            emptyText.text = getString(string.no_projects_found)
+                          }
+                        }
+                      }
                     }
-                    .thenByDescending { it.lastModified() }
-            )
+                  },
+              )
+          recyclerView.adapter = adapter
 
-    var adapter: ProjectsListAdapter? = null
+          searchEditText?.addTextChangedListener(
+              object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 
-    if (projectDirs.isEmpty()) {
-      recyclerView.visibility = View.GONE
-      emptyText.visibility = View.VISIBLE
-    } else {
-      recyclerView.visibility = View.VISIBLE
-      emptyText.visibility = View.GONE
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                  adapter?.filter(s?.toString() ?: "")
 
-      adapter =
-          ProjectsListAdapter(
-              projects = projectDirs,
-              onProjectClick = { selectedDir ->
-                bottomSheet.dismiss()
-                openProject(selectedDir)
-              },
-              onProjectLongClick = { project ->
-                showProjectOptionsDialog(project) {
-                  val updatedProjectDirProjects =
-                      GeneralFileUtils.listDirsInDirectory(Environment.PROJECTS_DIR).filter {
-                        isValidAndroidProject(it)
-                      }
-                  val updatedRecentProjectPaths =
-                      WizardPreferences.getRecentProjects(requireContext())
-                  val updatedRecentProjectFiles =
-                      updatedRecentProjectPaths.mapNotNull { path ->
-                        val file = File(path)
-                        if (file.exists() && file.isDirectory && isValidAndroidProject(file)) file
-                        else null
-                      }
-
-                  val updatedAllProjectsMap = mutableMapOf<String, File>()
-                  updatedRecentProjectFiles.forEach { file ->
-                    updatedAllProjectsMap[file.absolutePath] = file
-                  }
-                  updatedProjectDirProjects.forEach { file ->
-                    updatedAllProjectsMap[file.absolutePath] = file
-                  }
-
-                  val updatedDirs =
-                      updatedAllProjectsMap.values
-                          .toList()
-                          .sortedWith(
-                              compareBy<File> { proj ->
-                                    val recentIndex =
-                                        updatedRecentProjectPaths.indexOf(proj.absolutePath)
-                                    if (recentIndex >= 0) recentIndex else Int.MAX_VALUE
-                                  }
-                                  .thenByDescending { it.lastModified() }
-                          )
-
-                  adapter?.updateProjects(updatedDirs)
-
-                  if (updatedDirs.isEmpty()) {
+                  if (adapter?.itemCount == 0) {
                     recyclerView.visibility = View.GONE
                     emptyText.visibility = View.VISIBLE
-                    emptyText.text = getString(string.no_projects_found)
+                    emptyText.text = getString(string.no_projects_match_search)
+                  } else {
+                    recyclerView.visibility = View.VISIBLE
+                    emptyText.visibility = View.GONE
                   }
                 }
-              },
-          )
-      recyclerView.adapter = adapter
 
-      searchEditText?.addTextChangedListener(
-          object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-              adapter?.filter(s?.toString() ?: "")
-
-              if (adapter?.itemCount == 0) {
-                recyclerView.visibility = View.GONE
-                emptyText.visibility = View.VISIBLE
-                emptyText.text = getString(string.no_projects_match_search)
-              } else {
-                recyclerView.visibility = View.VISIBLE
-                emptyText.visibility = View.GONE
+                override fun afterTextChanged(s: android.text.Editable?) {}
               }
-            }
-
-            override fun afterTextChanged(s: android.text.Editable?) {}
-          }
-      )
+          )
+        }
+      }
     }
 
     btnBrowse.setOnClickListener {

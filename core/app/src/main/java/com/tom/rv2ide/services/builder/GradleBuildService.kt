@@ -23,6 +23,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.Looper
 import android.text.TextUtils
 import androidx.core.app.NotificationManagerCompat
 import com.blankj.utilcode.util.ResourceUtils
@@ -585,7 +586,11 @@ class GradleBuildService :
           }
 
           override fun onOutput(line: String?) {
-            runOnUiThread { listener.onOutput(line) }
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+              listener.onOutput(line)
+            } else {
+              runOnUiThread { listener.onOutput(line) }
+            }
           }
         }
   }
