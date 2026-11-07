@@ -209,6 +209,11 @@ abstract class BaseEditorActivity :
 
   private val memoryUsageListener =
       MemoryUsageWatcher.MemoryUsageListener { memoryUsage ->
+        val binding = _binding ?: return@MemoryUsageListener
+        if (!binding.swipeReveal.isOpen) {
+          return@MemoryUsageListener
+        }
+
         // Check available memory before updating chart
         val runtime = Runtime.getRuntime()
         val usedMemory = runtime.totalMemory() - runtime.freeMemory()
@@ -1315,7 +1320,11 @@ override fun onApplySystemBarInsets(insets: Insets) {
     binding.contentCard.progress = 0f
     binding.swipeReveal.dragListener =
         object : SwipeRevealLayout.OnDragListener {
-          override fun onDragStateChanged(swipeRevealLayout: SwipeRevealLayout, state: Int) {}
+          override fun onDragStateChanged(swipeRevealLayout: SwipeRevealLayout, state: Int) {
+            if (swipeRevealLayout.isOpen) {
+              _binding?.memUsageView?.chart?.invalidate()
+            }
+          }
 
           override fun onDragProgress(swipeRevealLayout: SwipeRevealLayout, progress: Float) {
             onSwipeRevealDragProgress(progress)

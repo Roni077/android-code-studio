@@ -55,6 +55,17 @@ import org.eclipse.jdt.core.Signature
 
 class CompletionListAdapter : EditorCompletionAdapter() {
 
+  @Volatile private var cachedApiVersions: ApiVersions? = null
+
+  private fun getApiVersions(): ApiVersions? {
+    var versions = cachedApiVersions
+    if (versions == null) {
+      versions = Lookup.getDefault().lookup(ApiVersions.COMPLETION_LOOKUP_KEY)
+      cachedApiVersions = versions
+    }
+    return versions
+  }
+
   override fun getItemHeight(): Int {
     return TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
@@ -148,8 +159,7 @@ class CompletionListAdapter : EditorCompletionAdapter() {
       }
 
       val data = item.data
-      val versions =
-          Lookup.getDefault().lookup(ApiVersions.COMPLETION_LOOKUP_KEY) ?: return@executeAsync null
+      val versions = getApiVersions() ?: return@executeAsync null
       val info =
           when (data) {
             is ClassCompletionData -> versions.classInfo(data.className)

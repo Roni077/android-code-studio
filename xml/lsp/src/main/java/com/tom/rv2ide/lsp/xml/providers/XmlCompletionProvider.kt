@@ -61,6 +61,7 @@ import com.tom.rv2ide.utils.StopWatch
 import io.github.rosemoe.sora.text.ContentReference
 import java.io.Reader
 import kotlin.io.path.name
+import org.eclipse.lemminx.dom.DOMDocument
 import org.eclipse.lemminx.dom.DOMParser
 import org.eclipse.lemminx.uriresolver.URIResolverExtensionManager
 import org.slf4j.LoggerFactory
@@ -95,15 +96,29 @@ class XmlCompletionProvider(settings: IServerSettings) :
     }
   }
 
-  private fun doComplete(params: CompletionParams): CompletionResult {
-    val contents = toString(contents = params.requireContents())
-    val document =
+  private val resolverExtensionManager = URIResolverExtensionManager()
+  @Volatile private var cachedDocumentEntry: Pair<Int, DOMDocument>? = null
+
+  private fun getOrCreateDocument(contents: String): DOMDocument {
+    val hash = contents.hashCode()
+    val cached = cachedDocumentEntry
+    if (cached != null && cached.first == hash) {
+      return cached.second
+    }
+    val doc =
         DOMParser.getInstance()
             .parse(
                 contents,
                 "http://schemas.android.com/apk/res/android",
-                URIResolverExtensionManager(),
+                resolverExtensionManager,
             )
+    cachedDocumentEntry = Pair(hash, doc)
+    return doc
+  }
+
+  private fun doComplete(params: CompletionParams): CompletionResult {
+    val contents = toString(contents = params.requireContents())
+    val document = getOrCreateDocument(contents)
     val type = XmlUtils.getNodeType(document, params.position.requireIndex())
 
     if (type == UNKNOWN) {

@@ -153,3 +153,21 @@
 -keepclassmembers class * extends java.lang.Record {
     <init>(...);
 }
+
+# Javac compiler internals & tools
+-keep class com.sun.tools.javac.** { *; }
+-keep class com.sun.source.** { *; }
+
+# Sora Editor Tree-sitter integration
+-keep class io.github.rosemoe.sora.editor.ts.** { *; }
+
+# LemMinX XML Language Server
+-keep class org.eclipse.lemminx.** { *; }
+-keep class org.eclipse.lsp4j.** { *; }
+
+# AutoService KSP provider metadata
+-keep class dev.zacsweers.autoservice.** { *; }
+-keep class META-INF.services.** { *; }
+
+# Guava suppressions
+-dontwarn com.google.common.**

@@ -163,7 +163,7 @@ class EditorCompletionWindow(val editor: IDEEditor) : EditorAutoCompletion(edito
             editor.editorLanguage.interruptionLevel,
         )
 
-    publisher.setUpdateThreshold(1)
+    publisher.setUpdateThreshold(15)
 
     completionThread = CompletionThread(requestTime, publisher)
     completionThread.name = "CompletionThread-$requestTime"
