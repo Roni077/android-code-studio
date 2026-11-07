@@ -309,13 +309,15 @@ class FlutterApp : Template {
     val appBuildKts = File(appDir, "build.gradle.kts")
     appBuildKts.writeText(
         """
+        import java.util.Properties
+
         plugins {
             id("com.android.application")
             id("kotlin-android")
             id("dev.flutter.flutter-gradle-plugin")
         }
 
-        val localProperties = java.util.Properties().apply {
+        val localProperties = Properties().apply {
             val localPropertiesFile = rootProject.file("local.properties")
             if (localPropertiesFile.exists()) {
                 localPropertiesFile.reader(Charsets.UTF_8).use { load(it) }
@@ -335,8 +337,10 @@ class FlutterApp : Template {
                 targetCompatibility = JavaVersion.VERSION_17
             }
 
-            kotlinOptions {
-                jvmTarget = "17"
+            kotlin {
+                compilerOptions {
+                    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                }
             }
 
             sourceSets {

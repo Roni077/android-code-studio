@@ -178,13 +178,20 @@ object GradlePropertiesPresets {
           # http://www.gradle.org/docs/current/userguide/build_environment.html
           
           # Specifies the JVM arguments used for the daemon process.
-          # The setting is particularly useful for tweaking memory settings.
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -XX:+UseG1GC -Dfile.encoding=UTF-8
           
-          # When configured, Gradle will run in incubating parallel mode.
-          # This option should only be used with decoupled projects. More details, visit
-          # http://www.gradle.org/docs/current/userguide/multi_project_builds.html#sec:decoupled_projects
-          # org.gradle.parallel=true
+          # In-process Kotlin compilation (avoids launching secondary JVM daemon on Android)
+          kotlin.compiler.execution.strategy=in-process
+          
+          # Caching & VFS watching
+          org.gradle.configuration-cache=true
+          org.gradle.caching=true
+          org.gradle.vfs.watch=true
+          
+          # Daemon & Parallel execution
+          org.gradle.daemon=true
+          org.gradle.parallel=true
+          org.gradle.daemon.idletimeout=10800000
           
           # AndroidX package structure to make it clearer which packages are bundled with the
           # Android operating system, and which are packaged with your app's APK

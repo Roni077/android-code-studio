@@ -138,7 +138,7 @@ class TopLevelGradleWriter : TLGradle {
         builder.appendLine()
       }
       builder.appendLine("tasks.register('clean', Delete) {")
-      builder.appendLine("    delete rootProject.buildDir")
+      builder.appendLine("    delete rootProject.layout.buildDirectory")
       builder.appendLine("}")
     }
 

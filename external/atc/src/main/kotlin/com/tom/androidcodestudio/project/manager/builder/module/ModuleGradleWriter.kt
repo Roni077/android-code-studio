@@ -245,7 +245,7 @@ class MLGradleWriter : IMLGradleWriter {
 
     // Android block
     builder.appendLine("android {")
-    builder.appendLine("    namespace '${config.namespace}'")
+    builder.appendLine("    namespace = '${config.namespace}'")
     builder.appendLine("    compileSdk ${config.compileSdk}")
 
     // NDK version (top-level in android block)
@@ -284,7 +284,7 @@ class MLGradleWriter : IMLGradleWriter {
       builder.appendLine()
       builder.appendLine("    buildFeatures {")
       config.buildFeatures.forEach { feature ->
-        builder.appendLine("        ${feature.featureName} true")
+        builder.appendLine("        ${feature.featureName} = true")
       }
       builder.appendLine("    }")
     }

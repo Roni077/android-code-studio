@@ -75,7 +75,7 @@ object BuildPreferences {
 
   /** Switch for Gradle `--build-cache` option. */
   var isBuildCacheEnabled: Boolean
-    get() = prefManager.getBoolean(BUILD_CACHE)
+    get() = prefManager.getBoolean(BUILD_CACHE, true)
     set(enabled) {
       prefManager.putBoolean(BUILD_CACHE, enabled)
     }

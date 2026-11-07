@@ -136,6 +136,10 @@ object FlutterBuildManager {
         activeProcess = process
 
         val reader = BufferedReader(InputStreamReader(process.inputStream))
+        val buildLogBuffer = StringBuilder()
+        buildLogBuffer.append(">>> Starting Flutter Build...\n")
+        buildLogBuffer.append(commandString).append("\n")
+
         var line: String?
         var detectedApk: File? = null
         var firstCompilerError: String? = null
@@ -145,6 +149,8 @@ object FlutterBuildManager {
           val rawLine = line ?: break
           val cleanLine = stripAnsi(rawLine)
           val trimmedLine = cleanLine.trim()
+
+          buildLogBuffer.append(cleanLine).append("\n")
 
           if (trimmedLine.isEmpty()) {
             if (rawLine.contains("\r")) {
@@ -198,6 +204,12 @@ object FlutterBuildManager {
         val exitCode = process.waitFor()
         isBuildInProgress = false
         activeProcess = null
+
+        try {
+          File(projectDir, "build.log").writeText(buildLogBuffer.toString())
+        } catch (ioe: Throwable) {
+          log.warn("Failed to persist build.log: {}", ioe.message)
+        }
 
         if (exitCode == 0) {
           val outputApk = detectedApk ?: findOutputApk(projectDir)

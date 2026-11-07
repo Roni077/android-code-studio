@@ -292,6 +292,7 @@ class ComposeEmptyActivity : Template {
                     versionCode = 1,
                     versionName = "1.0",
                     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner",
+                    ndk = com.tom.androidcodestudio.project.manager.builder.module.NdkConfig(listOf("arm64-v8a")),
                 )
             )
             addBuildFeature(BuildFeature.COMPOSE)

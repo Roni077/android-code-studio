@@ -77,6 +77,23 @@ object FlutterProjectSynchronizer {
     )
     cachedProjectInfo = info
     log.info("Flutter project synchronized: {} (ID: {}, v{}+{})", appName, appId, versionName, versionCode)
+
+    try {
+      val syncContent = buildString {
+        appendLine("=== Android Code Studio - Flutter Project Sync ===")
+        appendLine("Project: $appName")
+        appendLine("Root: ${projectDir.absolutePath}")
+        appendLine("Application ID: $appId")
+        appendLine("Version: $versionName+$versionCode")
+        appendLine("External Storage: $isExternal (storage patch: $isPatched)")
+        appendLine("AAPT2 Override Configured: true")
+        appendLine("SYNC SUCCESSFUL")
+      }
+      File(projectDir, "sync.log").writeText(syncContent)
+    } catch (e: Exception) {
+      log.warn("Failed to write sync.log: {}", e.message)
+    }
+
     return info
   }
 
