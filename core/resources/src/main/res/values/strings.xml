@@ -530,6 +530,7 @@
 
   <string name="idepref_customFont_title">Use custom font</string>
   <string name="idepref_customFont_summary">If enabled, the file at \"/data/data/com.tom.rv2ide/files/home/.androidide/ui/font.ttf\" will be used as Editor font.</string>
+  <string name="idepref_terminal_customFont_summary">If enabled, the file at \"/data/data/com.tom.rv2ide/files/home/.termux/font.ttf\" will be used as Terminal font.</string>
   <string name="msg_installing_apk">Installing APK...</string>
   <string name="msg_action_open_application">Do you want to open the application?</string>
 

@@ -270,7 +270,7 @@ private class NavigationStylePreference(
     override val key: String = EditorPreferences.NAVIGATION_STYLE,
     override val title: Int = string.idepref_editor_nav_style_title,
     override val summary: Int? = string.idepref_editor_nav_style_summary,
-    override val icon: Int? = null,
+    override val icon: Int? = drawable.ic_sidebar_navigation,
 ) : SingleChoicePreference() {
 
   @IgnoredOnParcel override val dialogCancellable = true

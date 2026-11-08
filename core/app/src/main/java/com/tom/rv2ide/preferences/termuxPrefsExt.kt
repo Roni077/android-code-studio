@@ -259,7 +259,7 @@ class TermuxViewPreferences(
 class UseTerminalCustomFont(
     override val key: String = KEY_TERMUX_VIEW_CUSTOM_FONT,
     override val title: Int = R.string.idepref_customFont_title,
-    override val summary: Int? = R.string.idepref_customFont_summary,
+    override val summary: Int? = R.string.idepref_terminal_customFont_summary,
     override val icon: Int? = R.drawable.ic_custom_font,
 ) : SingleChoicePreference() {
 
