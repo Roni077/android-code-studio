@@ -42,4 +42,6 @@ dependencies {
   implementation(libs.common.utilcode)
   implementation(libs.common.editor)
   implementation(libs.tooling.slf4j)
+
+  testImplementation(libs.tests.junit)
 }

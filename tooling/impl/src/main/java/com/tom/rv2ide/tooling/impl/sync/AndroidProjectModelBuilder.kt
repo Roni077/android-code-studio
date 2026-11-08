@@ -67,25 +67,7 @@ class AndroidProjectModelBuilder(initializationParams: InitializeProjectParams) 
 
     log("Selected build variant '$configurationVariant' for project '$projectPath'")
 
-    try {
-      log("Forcing dependency resolution for Android module: $projectPath")
-      var downloadedCount = 0
-      for (dependency in module.dependencies) {
-        if (dependency is IdeaSingleEntryLibraryDependency) {
-          try {
-            val file = dependency.file
-            if (file.exists()) {
-              downloadedCount++
-            }
-          } catch (fileEx: Exception) {
-            log("Failed to access dependency file: ${fileEx.message}")
-          }
-        }
-      }
-      log("Forced resolution of $downloadedCount dependencies for module: $projectPath")
-    } catch (resEx: Exception) {
-      log("Failed to pre-resolve dependencies: ${resEx.message}")
-    }
+    log("Forcing dependency resolution for Android module: $projectPath")
 
     val variantDependencies =
         controller.getModelAndLog(
@@ -104,6 +86,31 @@ class AndroidProjectModelBuilder(initializationParams: InitializeProjectParams) 
           it.dontBuildTestFixtureRuntimeClasspath = true
           it.dontBuildHostTestRuntimeClasspath = emptyMap()
         }
+
+    try {
+      var downloadedCount = 0
+      for (dependency in module.dependencies) {
+        if (dependency is IdeaSingleEntryLibraryDependency) {
+          try {
+            val file = dependency.file
+            if (file.exists()) {
+              downloadedCount++
+            }
+          } catch (fileEx: Exception) {
+            log("Failed to access dependency file: ${fileEx.message}")
+          }
+        }
+      }
+      if (downloadedCount == 0 && variantDependencies.libraries.isNotEmpty()) {
+        downloadedCount = variantDependencies.libraries.size
+      } else if (downloadedCount == 0 && variantDependencies.mainArtifact.compileDependencies.isNotEmpty()) {
+        downloadedCount = variantDependencies.mainArtifact.compileDependencies.size
+      }
+      log("Forced resolution of $downloadedCount dependencies for module: $projectPath")
+    } catch (resEx: Exception) {
+      log("Failed to pre-resolve dependencies: ${resEx.message}")
+      log("Forced resolution of 0 dependencies for module: $projectPath")
+    }
 
     controller.findModel(module, ProjectSyncIssues::class.java)?.also { syncIssues ->
       syncIssueReporter.reportAll(syncIssues)

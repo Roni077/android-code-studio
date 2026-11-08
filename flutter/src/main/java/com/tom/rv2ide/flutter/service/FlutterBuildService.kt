@@ -151,11 +151,11 @@ class FlutterBuildService : Service(), BuildService, FlutterBuildEventListener {
     val projectDir = File(params.directory)
     CoroutineScope(Dispatchers.IO).launch {
       try {
-        val info = FlutterProjectSynchronizer.synchronize(projectDir) { line ->
+        val result = FlutterProjectSynchronizer.prepareSync(projectDir) { line ->
           FlutterBuildManager.notifyOutput(line)
         }
         future.complete(
-            if (info != null) InitializeResult(true, null)
+            if (result.isSuccessful) InitializeResult(true, null)
             else InitializeResult(false, TaskExecutionResult.Failure.BUILD_FAILED)
         )
       } catch (e: Exception) {

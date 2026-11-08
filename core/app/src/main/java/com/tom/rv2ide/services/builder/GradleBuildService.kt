@@ -30,6 +30,7 @@ import com.blankj.utilcode.util.ResourceUtils
 import com.blankj.utilcode.util.ZipUtils
 import com.termux.shared.termux.shell.command.environment.TermuxShellEnvironment
 import com.tom.rv2ide.BuildConfig
+import com.tom.rv2ide.flutter.project.FlutterProjectHelper
 import com.tom.rv2ide.R.*
 import com.tom.rv2ide.app.BaseApplication
 import com.tom.rv2ide.lookup.Lookup
@@ -117,9 +118,15 @@ class GradleBuildService :
         return false
       }
 
-      val gradlew = File(projectRoot, "gradlew")
-      val gradleWrapperJar = File(projectRoot, "gradle/wrapper/gradle-wrapper.jar")
-      val gradleWrapperProps = File(projectRoot, "gradle/wrapper/gradle-wrapper.properties")
+      val gradleRoot = if (FlutterProjectHelper.isFlutterProject(projectRoot)) {
+        File(projectRoot, "android")
+      } else {
+        projectRoot
+      }
+
+      val gradlew = File(gradleRoot, "gradlew")
+      val gradleWrapperJar = File(gradleRoot, "gradle/wrapper/gradle-wrapper.jar")
+      val gradleWrapperProps = File(gradleRoot, "gradle/wrapper/gradle-wrapper.properties")
       return gradlew.exists() && gradleWrapperJar.exists() && gradleWrapperProps.exists()
     }
 
@@ -451,7 +458,12 @@ class GradleBuildService :
     }
     try {
       val projectDir = ProjectManagerImpl.getInstance().projectDir
-      val files = ZipUtils.unzipFile(extracted, projectDir)
+      val targetDir = if (FlutterProjectHelper.isFlutterProject(projectDir)) {
+        File(projectDir, "android")
+      } else {
+        projectDir
+      }
+      val files = ZipUtils.unzipFile(extracted, targetDir)
       if (files != null && files.isNotEmpty()) {
         return GradleWrapperCheckResult(true)
       }

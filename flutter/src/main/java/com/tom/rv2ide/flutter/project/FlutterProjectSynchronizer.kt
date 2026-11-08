@@ -17,11 +17,14 @@
 
 package com.tom.rv2ide.flutter.project
 
+import com.tom.rv2ide.flutter.sdk.AndroidSdkValidator
 import com.tom.rv2ide.shell.executeProcessAsync
 import com.tom.rv2ide.utils.Environment
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
+import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
 import org.slf4j.LoggerFactory
 
 data class FlutterProjectInfo(
@@ -34,21 +37,34 @@ data class FlutterProjectInfo(
     val isStoragePatched: Boolean
 )
 
+data class FlutterPreparationResult(
+    val isSuccessful: Boolean,
+    val projectInfo: FlutterProjectInfo?,
+    val errorMessage: String? = null,
+)
+
 object FlutterProjectSynchronizer {
 
   private val log = LoggerFactory.getLogger(FlutterProjectSynchronizer::class.java)
 
   @Volatile private var cachedProjectInfo: FlutterProjectInfo? = null
+  private val syncLock = Any()
+
+  // Cache fingerprints for avoiding unnecessary flutter pub get executions
+  private val pubspecTimestamps = ConcurrentHashMap<String, Long>()
+  private val pubspecLockTimestamps = ConcurrentHashMap<String, Long>()
 
   /**
-   * Synchronizes the Flutter project workspace: parses metadata, verifies external storage patch,
-   * ensures native AAPT2 overrides, runs pub get, and extracts application package ID.
+   * Prepares the Flutter project synchronization (Phase 1 & Phase 2).
+   * Validates pubspec, detects SDKs, validates Android SDK integrity,
+   * runs flutter pub get when dependencies have changed, ensures
+   * local.properties and external storage execution patches are active.
    */
-  @Synchronized
-  fun synchronize(
+  fun prepareSync(
       projectDir: File,
-      onLog: ((String) -> Unit)? = null
-  ): FlutterProjectInfo? {
+      forcePubGet: Boolean = false,
+      onLog: ((String) -> Unit)? = null,
+  ): FlutterPreparationResult = synchronized(syncLock) {
     val logCallback = onLog ?: {}
     val syncLogBuffer = StringBuilder()
 
@@ -59,16 +75,23 @@ object FlutterProjectSynchronizer {
     }
 
     if (!FlutterProjectHelper.isFlutterProject(projectDir)) {
-      emit("Cannot synchronize: Not a Flutter project: ${projectDir.absolutePath}")
-      return null
+      val msg = "Cannot synchronize: Not a Flutter project: ${projectDir.absolutePath}"
+      emit(msg)
+      return FlutterPreparationResult(false, null, msg)
     }
 
-    val startTime = System.currentTimeMillis()
-    emit(">>> Starting Flutter Project Synchronization...")
-    emit("Root: ${projectDir.absolutePath}")
+    val androidDir = File(projectDir, "android")
+    if (!androidDir.exists() || !androidDir.isDirectory) {
+      val msg = "No 'android' directory found in Flutter project at ${projectDir.absolutePath}. Run 'flutter create .' to generate Android platform support."
+      emit(msg)
+      return FlutterPreparationResult(false, null, msg)
+    }
 
-    // 1. Parse pubspec.yaml
-    emit("[1/5] Parsing pubspec.yaml...")
+    emit(">>> Starting Flutter Project Discovery & SDK Validation...")
+    emit("Flutter Root: ${projectDir.absolutePath}")
+    emit("Android Subproject: ${androidDir.absolutePath}")
+
+    // --- Phase 1: Flutter Project Discovery & SDK Validation ---
     val pubspecFile = File(projectDir, "pubspec.yaml")
     val pubspec = PubspecParser.parse(pubspecFile)
     val appName = pubspec?.name ?: "flutter_app"
@@ -77,11 +100,41 @@ object FlutterProjectSynchronizer {
     emit("  • Project: $appName")
     emit("  • Version: $versionName+$versionCode")
 
-    // 2. Resolve dependencies (flutter pub get)
-    emit("[2/5] Resolving dependencies (flutter pub get)...")
-    if (FlutterProjectHelper.isFlutterInstalled()) {
+    // Detect SDK Locations
+    val flutterBin = Environment.FLUTTER_BIN ?: File(Environment.FLUTTER_HOME, "bin/flutter")
+    val flutterInstalled = FlutterProjectHelper.isFlutterInstalled()
+    val androidSdkDir = Environment.ANDROID_HOME
+    emit("  • Flutter SDK: ${if (flutterInstalled) flutterBin.absolutePath else "Not Detected"}")
+    emit("  • Android SDK: ${androidSdkDir?.absolutePath ?: "Not Detected"}")
+
+    // Android SDK Validation (Section 4)
+    val sdkValidation = AndroidSdkValidator.validate(androidSdkDir)
+    emit(sdkValidation.formatReport())
+    if (sdkValidation.details.isNotEmpty()) {
+      for (detail in sdkValidation.details) {
+        log.warn("SDK validation detail: {}", detail)
+      }
+    }
+
+    // Detect Gradle Wrapper, Gradle, and AGP versions
+    val wrapperPropsFile = File(androidDir, "gradle/wrapper/gradle-wrapper.properties")
+    val gradleVersion = detectGradleVersion(wrapperPropsFile)
+    val agpVersion = detectAgpVersion(androidDir)
+    emit("  • Gradle wrapper: ${if (wrapperPropsFile.exists()) "Present" else "Missing"}")
+    emit("  • Gradle distribution: $gradleVersion")
+    emit("  • Android Gradle Plugin: $agpVersion")
+
+    // --- Phase 2: Flutter Dependency Resolution ---
+    emit(">>> Resolving Flutter dependencies...")
+    val pubspecLockFile = File(projectDir, "pubspec.lock")
+    val packageConfigFile = File(projectDir, ".dart_tool/package_config.json")
+    val isUpToDate = !forcePubGet && isDependenciesUpToDate(projectDir, pubspecFile, pubspecLockFile, packageConfigFile)
+
+    if (isUpToDate) {
+      emit("  Dependencies up to date (pubspec unchanged). Skipping 'flutter pub get'.")
+    } else if (flutterInstalled) {
       try {
-        val flutterBin = Environment.FLUTTER_BIN ?: File(Environment.FLUTTER_HOME, "bin/flutter")
+        emit("  Executing 'flutter pub get'...")
         val env = mutableMapOf<String, String>()
         Environment.putEnvironment(env, false)
         val process = executeProcessAsync {
@@ -90,6 +143,7 @@ object FlutterProjectSynchronizer {
           this.environment = env
           this.redirectErrorStream = true
         }
+
         val reader = BufferedReader(InputStreamReader(process.inputStream))
         var pubLine: String?
         while (reader.readLine().also { pubLine = it } != null) {
@@ -98,44 +152,41 @@ object FlutterProjectSynchronizer {
             emit("  $l")
           }
         }
-        val code = process.waitFor()
-        if (code == 0) {
+        val exitCode = process.waitFor()
+        if (exitCode == 0) {
           emit("  Dependencies resolved successfully.")
+          pubspecTimestamps[projectDir.absolutePath] = pubspecFile.lastModified()
+          pubspecLockTimestamps[projectDir.absolutePath] = pubspecLockFile.lastModified()
         } else {
-          emit("  Warning: 'flutter pub get' exited with code $code")
+          val msg = "Flutter dependency resolution failed ('flutter pub get' exited with code $exitCode). Check pubspec.yaml for package conflicts."
+          emit("  Error: $msg")
+          return FlutterPreparationResult(false, null, msg)
         }
       } catch (e: Exception) {
-        emit("  Warning: Failed to execute flutter pub get: ${e.message}")
+        val msg = "Failed to execute 'flutter pub get': ${e.message}"
+        emit("  Error: $msg")
+        return FlutterPreparationResult(false, null, msg)
       }
     } else {
-      emit("  Skipping pub get (Flutter SDK executable not found in environment)")
+      emit("  Warning: Flutter SDK executable not found; skipping 'flutter pub get'.")
     }
 
-    // 3. Configure Android subproject (AAPT2 override, arm64-v8a filter, sdk 36)
-    emit("[3/5] Configuring Android build files & AAPT2 override...")
-    val androidConfigured = FlutterProjectHelper.configureProjectForAndroidCS(projectDir)
-    emit("  • Android settings configured: $androidConfigured")
-    emit("  • Native AAPT2 override: active")
-    emit("  • Gradle console: plain (task-level tracking enabled)")
-    emit("  • Target SDK: 36, Compile SDK: 36")
+    // Configure local.properties for Flutter & Android SDK paths
+    ensureLocalProperties(androidDir, androidSdkDir, Environment.FLUTTER_HOME, versionName, versionCode)
 
-    // 4. Ensure external storage patch is active if running from shared storage
-    emit("[4/5] Verifying external storage execution patch...")
+    // Configure Android subproject build files (AAPT2 override, ABI filters)
+    val androidConfigured = FlutterProjectHelper.configureProjectForAndroidCS(projectDir)
+    emit("  • Android configuration applied: $androidConfigured")
+
+    // Verify external storage execution patch
     val isExternal = projectDir.absolutePath.startsWith("/storage/emulated/0") ||
         projectDir.absolutePath.startsWith("/sdcard")
     val isPatched = ensureStoragePatchApplied()
-    emit("  • External storage: $isExternal")
-    emit("  • Execution patch applied: $isPatched")
+    emit("  • External storage: $isExternal (Patch applied: $isPatched)")
 
-    // 5. Extract applicationId
-    emit("[5/5] Extracting application metadata...")
+    // Extract Application Metadata
     val appId = extractApplicationId(projectDir) ?: "com.example.$appName"
     emit("  • Application ID: $appId")
-    emit("  • Build variants: [debug, profile, release]")
-
-    val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
-    val elapsedStr = String.format(java.util.Locale.US, "%.1fs", elapsed)
-    emit("CONFIGURE SUCCESSFUL in $elapsedStr")
 
     val info = FlutterProjectInfo(
         rootDir = projectDir,
@@ -154,7 +205,20 @@ object FlutterProjectSynchronizer {
       log.warn("Failed to write sync.log: {}", e.message)
     }
 
-    return info
+    return FlutterPreparationResult(true, info)
+  }
+
+  /**
+   * Backwards compatible synchronize method that runs discovery, validation,
+   * pub get, and caches FlutterProjectInfo.
+   */
+  @Synchronized
+  fun synchronize(
+      projectDir: File,
+      onLog: ((String) -> Unit)? = null
+  ): FlutterProjectInfo? {
+    val result = prepareSync(projectDir, false, onLog)
+    return result.projectInfo
   }
 
   fun getCachedProjectInfo(): FlutterProjectInfo? = cachedProjectInfo
@@ -166,6 +230,122 @@ object FlutterProjectSynchronizer {
       }
     }
     return extractApplicationId(projectDir)
+  }
+
+  /**
+   * Checks whether Flutter dependencies are already up-to-date to avoid duplicate pub get executions.
+   */
+  private fun isDependenciesUpToDate(
+      projectDir: File,
+      pubspecFile: File,
+      pubspecLockFile: File,
+      packageConfigFile: File,
+  ): Boolean {
+    if (!pubspecLockFile.exists() || !packageConfigFile.exists()) {
+      return false
+    }
+
+    val lastPubspec = pubspecTimestamps[projectDir.absolutePath] ?: 0L
+    val lastLock = pubspecLockTimestamps[projectDir.absolutePath] ?: 0L
+
+    val currentPubspecTime = pubspecFile.lastModified()
+    val currentLockTime = pubspecLockFile.lastModified()
+
+    return lastPubspec == currentPubspecTime &&
+        lastLock == currentLockTime &&
+        currentLockTime >= currentPubspecTime
+  }
+
+  /**
+   * Ensures `<flutter_project>/android/local.properties` contains valid sdk.dir and flutter.sdk keys.
+   */
+  fun ensureLocalProperties(
+      androidDir: File,
+      androidSdkDir: File?,
+      flutterSdkDir: File?,
+      versionName: String,
+      versionCode: Int
+  ) {
+    val localPropsFile = File(androidDir, "local.properties")
+    val props = Properties()
+
+    if (localPropsFile.exists()) {
+      try {
+        localPropsFile.inputStream().use { props.load(it) }
+      } catch (e: Exception) {
+        log.warn("Failed to read existing local.properties: {}", e.message)
+      }
+    }
+
+    var modified = false
+
+    if (androidSdkDir != null && androidSdkDir.exists()) {
+      val existingSdk = props.getProperty("sdk.dir")
+      if (existingSdk.isNullOrBlank() || !File(existingSdk).exists()) {
+        props.setProperty("sdk.dir", androidSdkDir.absolutePath)
+        modified = true
+      }
+    }
+
+    if (flutterSdkDir != null && flutterSdkDir.exists()) {
+      val existingFlutter = props.getProperty("flutter.sdk")
+      if (existingFlutter.isNullOrBlank() || !File(existingFlutter).exists()) {
+        props.setProperty("flutter.sdk", flutterSdkDir.absolutePath)
+        modified = true
+      }
+    }
+
+    if (!props.containsKey("flutter.versionCode")) {
+      props.setProperty("flutter.versionCode", versionCode.toString())
+      modified = true
+    }
+
+    if (!props.containsKey("flutter.versionName")) {
+      props.setProperty("flutter.versionName", versionName)
+      modified = true
+    }
+
+    if (modified || !localPropsFile.exists()) {
+      try {
+        localPropsFile.outputStream().use { props.store(it, "Generated by RV2IDE Flutter Sync") }
+        log.info("Ensured local.properties in: {}", androidDir.absolutePath)
+      } catch (e: Exception) {
+        log.error("Failed to write local.properties: {}", e.message)
+      }
+    }
+  }
+
+  private fun detectGradleVersion(wrapperPropsFile: File): String {
+    if (!wrapperPropsFile.exists()) return "unknown (wrapper missing)"
+    return try {
+      val text = wrapperPropsFile.readText()
+      val match = Regex("""gradle-([0-9.]+)-(bin|all)\.zip""").find(text)
+      match?.groupValues?.get(1) ?: "custom"
+    } catch (_: Exception) {
+      "unknown"
+    }
+  }
+
+  private fun detectAgpVersion(androidDir: File): String {
+    val settingsFiles = listOf(File(androidDir, "settings.gradle.kts"), File(androidDir, "settings.gradle"))
+    for (f in settingsFiles) {
+      if (f.exists()) {
+        try {
+          val match = Regex("""id\(?["']com\.android\.application["']\)?\s+version\s+["']([0-9.]+)["']""").find(f.readText())
+          if (match != null) return match.groupValues[1]
+        } catch (_: Exception) {}
+      }
+    }
+    val buildFiles = listOf(File(androidDir, "build.gradle.kts"), File(androidDir, "build.gradle"))
+    for (f in buildFiles) {
+      if (f.exists()) {
+        try {
+          val match = Regex("""com\.android\.tools\.build:gradle:([0-9.]+)""").find(f.readText())
+          if (match != null) return match.groupValues[1]
+        } catch (_: Exception) {}
+      }
+    }
+    return "auto"
   }
 
   /**

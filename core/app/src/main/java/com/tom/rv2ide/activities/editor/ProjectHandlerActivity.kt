@@ -279,25 +279,6 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
   }
 
   fun startServices() {
-    val projectDir = try { ProjectManagerImpl.getInstance().projectDir } catch (_: Exception) { null }
-    if (FlutterProjectHelper.isFlutterProject(projectDir)) {
-      log.info("Project is a Flutter project. Binding to FlutterBuildService...")
-      flutterBuildServiceConnection.onConnected = { flutterService ->
-        log.info("Connected to FlutterBuildService")
-        Lookup.getDefault().update(BuildService.KEY_BUILD_SERVICE, flutterService)
-        flutterService.setEventListener(mBuildEventListener.flutterListener)
-        editorViewModel.isBoundToBuildSerice = true
-      }
-      bindService(
-          Intent(this, FlutterBuildService::class.java),
-          flutterBuildServiceConnection,
-          BIND_AUTO_CREATE or BIND_IMPORTANT,
-      )
-      initializeProject(emptyMap())
-      initLspClient()
-      return
-    }
-
     val service = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE) as GradleBuildService?
     if (editorViewModel.isBoundToBuildSerice && service != null) {
       log.info("Reusing already started Gradle build service")
@@ -388,46 +369,11 @@ abstract class ProjectHandlerActivity : BaseEditorActivity() {
    *
    * @param buildVariants A map of project paths to the selected build variants.
    */
-fun initializeProject(buildVariants: Map<String, String>) {
+  fun initializeProject(buildVariants: Map<String, String>) {
     val manager = ProjectManagerImpl.getInstance()
     val projectDir = manager.projectDir
     if (!projectDir.exists()) {
       log.error("GradleProject directory does not exist. Cannot initialize project")
-      return
-    }
-
-    if (FlutterProjectHelper.isFlutterProject(projectDir)) {
-      log.info("Synchronizing Flutter project: {}", projectDir.name)
-      ThreadUtils.runOnUiThread {
-        preProjectInit()
-        content.bottomSheet.showBuildOutput()
-        content.bottomSheet.clearBuildOutput()
-      }
-      editorActivityScope.launch(Dispatchers.IO) {
-        val info = FlutterProjectSynchronizer.synchronize(projectDir) { line ->
-          ThreadUtils.runOnUiThread {
-            appendBuildOutput(line)
-          }
-        }
-        manager.projectInitialized = true
-        val variantInfo = BuildVariantInfo(
-            projectPath = ":app",
-            buildVariants = listOf("debug", "profile", "release"),
-            selectedVariant = "debug",
-            versionName = info?.versionName ?: "1.0.0",
-            versionCode = info?.versionCode ?: 1,
-            minSdk = 21,
-            targetSdk = 36,
-            compileSdk = 36
-        )
-        updateBuildVariants(mapOf(":app" to variantInfo))
-        ThreadUtils.runOnUiThread {
-          postProjectInit(info != null, null)
-          if (info != null) {
-            flashSuccess("Flutter project synchronized: ${info.name}")
-          }
-        }
-      }
       return
     }
 
@@ -449,7 +395,10 @@ fun initializeProject(buildVariants: Map<String, String>) {
       return
     }
 
-    ThreadUtils.runOnUiThread { preProjectInit() }
+    ThreadUtils.runOnUiThread {
+      preProjectInit()
+      content.bottomSheet.showBuildOutput()
+    }
 
     val buildService = Lookup.getDefault().lookup(BuildService.KEY_BUILD_SERVICE)
     if (buildService == null) {
@@ -462,6 +411,40 @@ fun initializeProject(buildVariants: Map<String, String>) {
       return
     }
 
+    if (FlutterProjectHelper.isFlutterProject(projectDir)) {
+      log.info("Starting Flutter project synchronization pipeline for: {}", projectDir.name)
+      editorActivityScope.launch(Dispatchers.IO) {
+        val prepResult = FlutterProjectSynchronizer.prepareSync(projectDir) { line ->
+          ThreadUtils.runOnUiThread {
+            appendBuildOutput(line)
+          }
+        }
+
+        if (!prepResult.isSuccessful) {
+          val errorReason = prepResult.errorMessage ?: "Flutter dependency resolution failed"
+          log.error("Flutter preparation failed: {}", errorReason)
+          ThreadUtils.runOnUiThread {
+            flashError(errorReason)
+            postProjectInit(false, TaskExecutionResult.Failure.BUILD_FAILED)
+          }
+          return@launch
+        }
+
+        doInitializeProjectWithToolingApi(buildService, projectDir, buildVariants, manager, initialized)
+      }
+      return
+    }
+
+    doInitializeProjectWithToolingApi(buildService, projectDir, buildVariants, manager, initialized)
+  }
+
+  private fun doInitializeProjectWithToolingApi(
+      buildService: BuildService,
+      projectDir: File,
+      buildVariants: Map<String, String>,
+      manager: ProjectManagerImpl,
+      initialized: Boolean,
+  ) {
     this.initializingFuture =
         if (shouldInitialize || (!isFromSavedInstance && !initialized)) {
           log.debug("Sending init request to tooling server..")
@@ -494,8 +477,13 @@ fun initializeProject(buildVariants: Map<String, String>) {
       projectDir: File,
       buildVariants: Map<String, String>,
   ): InitializeProjectParams {
+    val gradleProjectDir = if (FlutterProjectHelper.isFlutterProject(projectDir)) {
+      File(projectDir, "android")
+    } else {
+      projectDir
+    }
     return InitializeProjectParams(
-        projectDir.absolutePath,
+        gradleProjectDir.absolutePath,
         gradleDistributionParams,
         createAndroidParams(buildVariants),
     )

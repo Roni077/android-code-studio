@@ -233,16 +233,36 @@ class ProjectManagerImpl : IProjectManager, EventReceiver {
 
         val variantName = subproject.configuredVariant?.name ?: IAndroidProject.DEFAULT_VARIANT
 
-        val moduleDir = File(projectDir, subproject.path.replace(":", File.separator))
+        val moduleDir = subproject.projectDir
         val gradleInfo = GradleFileParser.parseModuleBuildGradle(moduleDir)
+
+        var versionName = gradleInfo?.versionName
+        var versionCode = gradleInfo?.versionCode
+
+        // If version information is referenced via local.properties (e.g. Flutter builds)
+        if (versionName.isNullOrBlank() || versionCode == null) {
+          val localProps = File(subproject.projectDir.parentFile ?: projectDir, "local.properties")
+          if (localProps.exists()) {
+            try {
+              val props = java.util.Properties()
+              localProps.inputStream().use { props.load(it) }
+              if (versionName.isNullOrBlank()) {
+                versionName = props.getProperty("flutter.versionName")
+              }
+              if (versionCode == null) {
+                versionCode = props.getProperty("flutter.versionCode")?.toIntOrNull()
+              }
+            } catch (_: Exception) {}
+          }
+        }
 
         buildVariants[subproject.path] =
             BuildVariantInfo(
                 projectPath = subproject.path,
                 buildVariants = variantNames,
                 selectedVariant = variantName,
-                versionName = gradleInfo?.versionName,
-                versionCode = gradleInfo?.versionCode,
+                versionName = versionName,
+                versionCode = versionCode,
                 minSdk = gradleInfo?.minSdk,
                 targetSdk = gradleInfo?.targetSdk,
                 compileSdk = gradleInfo?.compileSdk
