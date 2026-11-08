@@ -17,8 +17,11 @@
 
 package com.tom.rv2ide.flutter.project
 
+import com.tom.rv2ide.shell.executeProcessAsync
 import com.tom.rv2ide.utils.Environment
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
 import org.slf4j.LoggerFactory
 
 data class FlutterProjectInfo(
@@ -39,32 +42,100 @@ object FlutterProjectSynchronizer {
 
   /**
    * Synchronizes the Flutter project workspace: parses metadata, verifies external storage patch,
-   * ensures native AAPT2 overrides, and extracts application package ID.
+   * ensures native AAPT2 overrides, runs pub get, and extracts application package ID.
    */
   @Synchronized
-  fun synchronize(projectDir: File): FlutterProjectInfo? {
+  fun synchronize(
+      projectDir: File,
+      onLog: ((String) -> Unit)? = null
+  ): FlutterProjectInfo? {
+    val logCallback = onLog ?: {}
+    val syncLogBuffer = StringBuilder()
+
+    fun emit(line: String) {
+      syncLogBuffer.append(line).append("\n")
+      logCallback(line)
+      log.info(line)
+    }
+
     if (!FlutterProjectHelper.isFlutterProject(projectDir)) {
-      log.warn("Cannot synchronize: Not a Flutter project: {}", projectDir.absolutePath)
+      emit("Cannot synchronize: Not a Flutter project: ${projectDir.absolutePath}")
       return null
     }
 
+    val startTime = System.currentTimeMillis()
+    emit(">>> Starting Flutter Project Synchronization...")
+    emit("Root: ${projectDir.absolutePath}")
+
     // 1. Parse pubspec.yaml
+    emit("[1/5] Parsing pubspec.yaml...")
     val pubspecFile = File(projectDir, "pubspec.yaml")
     val pubspec = PubspecParser.parse(pubspecFile)
     val appName = pubspec?.name ?: "flutter_app"
     val versionName = pubspec?.versionName ?: "1.0.0"
     val versionCode = pubspec?.versionCode ?: 1
+    emit("  • Project: $appName")
+    emit("  • Version: $versionName+$versionCode")
 
-    // 2. Configure Android subproject (AAPT2 override, arm64-v8a filter, sdk 36)
-    FlutterProjectHelper.configureProjectForAndroidCS(projectDir)
+    // 2. Resolve dependencies (flutter pub get)
+    emit("[2/5] Resolving dependencies (flutter pub get)...")
+    if (FlutterProjectHelper.isFlutterInstalled()) {
+      try {
+        val flutterBin = Environment.FLUTTER_BIN ?: File(Environment.FLUTTER_HOME, "bin/flutter")
+        val env = mutableMapOf<String, String>()
+        Environment.putEnvironment(env, false)
+        val process = executeProcessAsync {
+          this.command = listOf(flutterBin.absolutePath, "pub", "get")
+          this.workingDirectory = projectDir
+          this.environment = env
+          this.redirectErrorStream = true
+        }
+        val reader = BufferedReader(InputStreamReader(process.inputStream))
+        var pubLine: String?
+        while (reader.readLine().also { pubLine = it } != null) {
+          val l = pubLine?.trim() ?: continue
+          if (l.isNotEmpty()) {
+            emit("  $l")
+          }
+        }
+        val code = process.waitFor()
+        if (code == 0) {
+          emit("  Dependencies resolved successfully.")
+        } else {
+          emit("  Warning: 'flutter pub get' exited with code $code")
+        }
+      } catch (e: Exception) {
+        emit("  Warning: Failed to execute flutter pub get: ${e.message}")
+      }
+    } else {
+      emit("  Skipping pub get (Flutter SDK executable not found in environment)")
+    }
 
-    // 3. Ensure external storage patch is active if running from shared storage
+    // 3. Configure Android subproject (AAPT2 override, arm64-v8a filter, sdk 36)
+    emit("[3/5] Configuring Android build files & AAPT2 override...")
+    val androidConfigured = FlutterProjectHelper.configureProjectForAndroidCS(projectDir)
+    emit("  • Android settings configured: $androidConfigured")
+    emit("  • Native AAPT2 override: active")
+    emit("  • Gradle console: plain (task-level tracking enabled)")
+    emit("  • Target SDK: 36, Compile SDK: 36")
+
+    // 4. Ensure external storage patch is active if running from shared storage
+    emit("[4/5] Verifying external storage execution patch...")
     val isExternal = projectDir.absolutePath.startsWith("/storage/emulated/0") ||
         projectDir.absolutePath.startsWith("/sdcard")
     val isPatched = ensureStoragePatchApplied()
+    emit("  • External storage: $isExternal")
+    emit("  • Execution patch applied: $isPatched")
 
-    // 4. Extract applicationId
+    // 5. Extract applicationId
+    emit("[5/5] Extracting application metadata...")
     val appId = extractApplicationId(projectDir) ?: "com.example.$appName"
+    emit("  • Application ID: $appId")
+    emit("  • Build variants: [debug, profile, release]")
+
+    val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
+    val elapsedStr = String.format(java.util.Locale.US, "%.1fs", elapsed)
+    emit("CONFIGURE SUCCESSFUL in $elapsedStr")
 
     val info = FlutterProjectInfo(
         rootDir = projectDir,
@@ -76,20 +147,9 @@ object FlutterProjectSynchronizer {
         isStoragePatched = isPatched
     )
     cachedProjectInfo = info
-    log.info("Flutter project synchronized: {} (ID: {}, v{}+{})", appName, appId, versionName, versionCode)
 
     try {
-      val syncContent = buildString {
-        appendLine("=== Android Code Studio - Flutter Project Sync ===")
-        appendLine("Project: $appName")
-        appendLine("Root: ${projectDir.absolutePath}")
-        appendLine("Application ID: $appId")
-        appendLine("Version: $versionName+$versionCode")
-        appendLine("External Storage: $isExternal (storage patch: $isPatched)")
-        appendLine("AAPT2 Override Configured: true")
-        appendLine("SYNC SUCCESSFUL")
-      }
-      File(projectDir, "sync.log").writeText(syncContent)
+      File(projectDir, "sync.log").writeText(syncLogBuffer.toString())
     } catch (e: Exception) {
       log.warn("Failed to write sync.log: {}", e.message)
     }

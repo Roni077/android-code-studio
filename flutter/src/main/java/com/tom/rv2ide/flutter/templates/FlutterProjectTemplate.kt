@@ -338,8 +338,8 @@ pluginManagement {
 
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.11.1" apply false
-    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
+    id "com.android.application" version "9.1.0" apply false
+    id "org.jetbrains.kotlin.android" version "2.4.0" apply false
 }
 
 include ":app"
@@ -368,6 +368,7 @@ tasks.register("clean", Delete) {
 
 private fun androidGradleProperties() = """
 org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8
+org.gradle.console=plain
 android.useAndroidX=true
 android.enableJetifier=true
 android.aapt2FromMavenOverride=${'$'}{com.tom.rv2ide.utils.Environment.PREFIX.absolutePath}/bin/aapt2

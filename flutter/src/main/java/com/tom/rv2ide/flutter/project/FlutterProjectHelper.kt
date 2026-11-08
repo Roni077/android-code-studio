@@ -83,6 +83,7 @@ object FlutterProjectHelper {
       configureGradlew(androidDir)
       configureGradleWrapper(androidDir)
       configureGradleProperties(androidDir)
+      configureSettingsGradle(androidDir)
       configureAppGradle(androidDir)
       return true
     } catch (e: Exception) {
@@ -142,8 +143,10 @@ object FlutterProjectHelper {
     val newDslEntry = "android.newDsl=false"
     val builtInKotlinEntry = "android.builtInKotlin=false"
 
+    val consolePlainEntry = "org.gradle.console=plain"
+
     if (!gradleProps.exists()) {
-      gradleProps.writeText("$overrideEntry\n$optimizationsEntry\n$shrinkEntry\n$jvmArgsEntry\n$newDslEntry\n$builtInKotlinEntry\n$inProcessEntry\n")
+      gradleProps.writeText("$overrideEntry\n$optimizationsEntry\n$shrinkEntry\n$jvmArgsEntry\n$consolePlainEntry\n$newDslEntry\n$builtInKotlinEntry\n$inProcessEntry\n")
       log.info("Created gradle.properties with AAPT2 override and AndroidCS settings: {}", aapt2Path)
       return
     }
@@ -162,6 +165,11 @@ object FlutterProjectHelper {
         content = updated
         modified = true
       }
+    }
+
+    if (!content.contains("org.gradle.console")) {
+      content += "$consolePlainEntry\n"
+      modified = true
     }
 
     if (!content.contains("android.enableResourceOptimizations")) {
@@ -194,6 +202,66 @@ object FlutterProjectHelper {
       gradleProps.writeText(content)
       log.info("Updated gradle.properties with AAPT2 override & upstream settings: {}", aapt2Path)
     }
+  }
+
+  private fun configureSettingsGradle(androidDir: File) {
+    val settingsKts = File(androidDir, "settings.gradle.kts")
+    val settingsGroovy = File(androidDir, "settings.gradle")
+    val targetFile = when {
+      settingsKts.exists() -> settingsKts
+      settingsGroovy.exists() -> settingsGroovy
+      else -> return
+    }
+
+    var content = targetFile.readText()
+    var modified = false
+
+    // Upgrade AGP if < 9.1.0
+    val agpRegex = Regex("""id\(?["']com\.android\.application["']\)?\s+version\s+["']([0-9.]+)["']""")
+    val agpMatch = agpRegex.find(content)
+    if (agpMatch != null) {
+      val currentAgp = agpMatch.groupValues[1]
+      if (isVersionLower(currentAgp, "9.1.0")) {
+        val oldStr = agpMatch.value
+        val newStr = oldStr.replace(currentAgp, "9.1.0")
+        content = content.replace(oldStr, newStr)
+        modified = true
+        log.info("Auto-upgraded AGP from {} to 9.1.0 in {}", currentAgp, targetFile.name)
+      }
+    }
+
+    // Upgrade Kotlin if < 2.4.0
+    val kotlinRegex = Regex("""id\(?["']org\.jetbrains\.kotlin\.android["']\)?\s+version\s+["']([0-9.]+)["']""")
+    val kotlinMatch = kotlinRegex.find(content)
+    if (kotlinMatch != null) {
+      val currentKotlin = kotlinMatch.groupValues[1]
+      if (isVersionLower(currentKotlin, "2.4.0")) {
+        val oldStr = kotlinMatch.value
+        val newStr = oldStr.replace(currentKotlin, "2.4.0")
+        content = content.replace(oldStr, newStr)
+        modified = true
+        log.info("Auto-upgraded Kotlin from {} to 2.4.0 in {}", currentKotlin, targetFile.name)
+      }
+    }
+
+    if (modified) {
+      File(androidDir, "${targetFile.name}.bak").writeText(targetFile.readText())
+      targetFile.writeText(content)
+      log.info("Upgraded build dependencies in {}", targetFile.name)
+    }
+  }
+
+  private fun isVersionLower(current: String, target: String): Boolean {
+    val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
+    val targetParts = target.split(".").mapNotNull { it.toIntOrNull() }
+    val maxLen = maxOf(currentParts.size, targetParts.size)
+    for (i in 0 until maxLen) {
+      val c = currentParts.getOrElse(i) { 0 }
+      val t = targetParts.getOrElse(i) { 0 }
+      if (c < t) return true
+      if (c > t) return false
+    }
+    return false
   }
 
   private fun configureAppGradle(androidDir: File) {

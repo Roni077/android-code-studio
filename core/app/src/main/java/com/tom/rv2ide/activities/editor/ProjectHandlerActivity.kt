@@ -398,9 +398,17 @@ fun initializeProject(buildVariants: Map<String, String>) {
 
     if (FlutterProjectHelper.isFlutterProject(projectDir)) {
       log.info("Synchronizing Flutter project: {}", projectDir.name)
-      ThreadUtils.runOnUiThread { preProjectInit() }
+      ThreadUtils.runOnUiThread {
+        preProjectInit()
+        content.bottomSheet.showBuildOutput()
+        content.bottomSheet.clearBuildOutput()
+      }
       editorActivityScope.launch(Dispatchers.IO) {
-        val info = FlutterProjectSynchronizer.synchronize(projectDir)
+        val info = FlutterProjectSynchronizer.synchronize(projectDir) { line ->
+          ThreadUtils.runOnUiThread {
+            appendBuildOutput(line)
+          }
+        }
         manager.projectInitialized = true
         val variantInfo = BuildVariantInfo(
             projectPath = ":app",

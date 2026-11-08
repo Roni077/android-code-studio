@@ -140,3 +140,6 @@ photo_*.jpg
 
 # Reference templates
 references/flutter_template/
+
+# Local sample test projects
+AndroidIDEProjects/

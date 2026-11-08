@@ -72,6 +72,13 @@ object FlutterBuildManager {
   }
 
   /**
+   * Forwards an output log line to all registered listeners.
+   */
+  fun notifyOutput(line: String) {
+    notifyAllListeners { onOutput(line) }
+  }
+
+  /**
    * Starts an on-device Flutter build asynchronously.
    *
    * @param projectDir The root directory of the Flutter project.
@@ -105,7 +112,12 @@ object FlutterBuildManager {
 
     isBuildInProgress = true
     val flutterBin = Environment.FLUTTER_BIN ?: File(Environment.FLUTTER_HOME, "bin/flutter")
-    val fullCommand = mutableListOf(flutterBin.absolutePath).apply { addAll(commandArgs) }
+    val adjustedArgs = commandArgs.toMutableList()
+    if ((adjustedArgs.contains("apk") || adjustedArgs.contains("appbundle")) &&
+        !adjustedArgs.contains("--android-skip-build-dependency-validation")) {
+      adjustedArgs.add("--android-skip-build-dependency-validation")
+    }
+    val fullCommand = mutableListOf(flutterBin.absolutePath).apply { addAll(adjustedArgs) }
     val commandString = fullCommand.joinToString(" ")
 
     log.info("Launching Flutter build command: {}", commandString)
@@ -289,6 +301,12 @@ object FlutterBuildManager {
 
   private fun parseBuildPhase(line: String): String? {
     return when {
+      line.startsWith("> Task ") -> {
+        val taskPart = line.substringAfter("> Task ").trim()
+        val taskName = taskPart.substringBefore(" ").trim()
+        if (taskName.isNotEmpty()) taskName else taskPart
+      }
+
       line.contains("Resolving dependencies", ignoreCase = true) ||
       line.contains("Running \"flutter pub get\"", ignoreCase = true) -> "Resolving Dependencies"
 
