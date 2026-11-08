@@ -47,6 +47,21 @@ interface FlutterBuildEventListener {
   fun onPhaseChanged(phase: String)
 
   /**
+   * Called when a specific Gradle task begins execution.
+   *
+   * @param taskName Fully qualified task path (e.g. `:app:compileDebugKotlin`).
+   */
+  fun onTaskStarted(taskName: String) {}
+
+  /**
+   * Called when a specific Gradle task completes execution.
+   *
+   * @param taskName Fully qualified task path.
+   * @param outcome Execution outcome (e.g. `UP-TO-DATE`, `FROM-CACHE`, `SKIPPED`, `NO-SOURCE`, `FAILED`, or null).
+   */
+  fun onTaskFinished(taskName: String, outcome: String?) {}
+
+  /**
    * Called when the build completes successfully with code 0.
    *
    * @param apkFile The generated APK file, or null if not yet located.

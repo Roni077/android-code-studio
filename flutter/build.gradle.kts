@@ -34,6 +34,7 @@ dependencies {
   api(projects.editor.impl)
   api(projects.utilities.templatesApi)
   api(projects.termux.application)
+  implementation(projects.utilities.preferences)
 
   implementation(libs.androidx.annotation)
   implementation(libs.androidx.appcompat)

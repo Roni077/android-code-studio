@@ -165,6 +165,7 @@ class FlutterBuildApkAction(context: Context, override val order: Int) : BaseFlu
     val targets = arrayOf(
         activity.getString(R.string.title_flutter_build_release_apk),
         activity.getString(R.string.title_flutter_build_debug_apk),
+        activity.getString(R.string.title_flutter_build_profile_apk),
         activity.getString(R.string.title_flutter_build_aab)
     )
 
@@ -172,9 +173,10 @@ class FlutterBuildApkAction(context: Context, override val order: Int) : BaseFlu
         .setTitle(R.string.title_flutter_build_target)
         .setItems(targets) { _, which ->
           val cmd = when (which) {
-            0 -> listOf("build", "apk", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons", "--android-skip-build-dependency-validation")
-            1 -> listOf("build", "apk", "--debug", "--no-tree-shake-icons", "--android-skip-build-dependency-validation")
-            else -> listOf("build", "appbundle", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons", "--android-skip-build-dependency-validation")
+            0 -> listOf("build", "apk", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
+            1 -> listOf("build", "apk", "--debug", "--no-tree-shake-icons")
+            2 -> listOf("build", "apk", "--profile", "--target-platform", "android-arm64", "--no-tree-shake-icons")
+            else -> listOf("build", "appbundle", "--release", "--target-platform", "android-arm64", "--no-tree-shake-icons")
           }
           try {
             val intent = Intent(activity, FlutterBuildService::class.java).apply {

@@ -77,11 +77,23 @@ class BuildOutputAnalyzer : AsyncIncrementalAnalyzeManager<Int, Span>() {
 
       // Tasks and Major Steps (Cyan + Bold)
       trimmed.startsWith("> Task :") ||
+      trimmed.startsWith("> Configure project") ||
+      trimmed.startsWith("Run tasks :") ||
       trimmed.startsWith("Running Gradle task") ||
       trimmed.startsWith(">>> Starting") ||
+      trimmed.startsWith(">>> Validating") ||
       trimmed.startsWith("Resolving dependencies") ||
       trimmed.startsWith("Running \"flutter") -> {
         TextStyle.makeStyle(SchemeAndroidIDE.LOG_TEXT_DEBUG, 0, true, false, false)
+      }
+
+      // Verification and Actionable Task Summaries (Bold Normal or Info)
+      trimmed.startsWith("APK:") ||
+      trimmed.startsWith("Size:") ||
+      trimmed.startsWith("Variant:") ||
+      trimmed.startsWith("ABI:") ||
+      trimmed.contains("actionable tasks:") -> {
+        TextStyle.makeStyle(SchemeAndroidIDE.LOG_TEXT_INFO)
       }
 
       // Performance trim notices (Gray Comment)

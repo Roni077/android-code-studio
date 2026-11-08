@@ -54,6 +54,14 @@ object FlutterTaskRegistry {
           isBuildTask = true
       ),
       FlutterTask(
+          id = "flutter:build_profile",
+          name = "Build Profile APK",
+          description = "Assemble profile APK with profiling enabled for android-arm64",
+          category = FlutterTaskCategory.BUILD,
+          commandArgs = listOf("build", "apk", "--profile", "--target-platform", "android-arm64", "--no-tree-shake-icons"),
+          isBuildTask = true
+      ),
+      FlutterTask(
           id = "flutter:build_aab",
           name = "Build App Bundle (AAB)",
           description = "Assemble release Android App Bundle for deployment",

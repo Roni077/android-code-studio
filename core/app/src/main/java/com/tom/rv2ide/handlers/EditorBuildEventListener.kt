@@ -81,9 +81,7 @@ class EditorBuildEventListener : GradleBuildService.EventListener {
         act.editorViewModel.isBuildInProgress = true
         act.content.bottomSheet.showBuildOutput()
         act.content.bottomSheet.clearBuildOutput()
-        act.appendBuildOutput(">>> Starting Flutter Build...")
-        act.appendBuildOutput(command)
-        act.setStatus("Building Flutter APK...")
+        act.setStatus("Starting build...")
       }
     }
 

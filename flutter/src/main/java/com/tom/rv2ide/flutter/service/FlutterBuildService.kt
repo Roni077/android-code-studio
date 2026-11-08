@@ -121,7 +121,7 @@ class FlutterBuildService : Service(), BuildService, FlutterBuildEventListener {
       listener: FlutterBuildEventListener? = null
   ): Boolean {
     acquireWakeLock()
-    currentPhase = "Starting Flutter command..."
+    currentPhase = "Preparing Gradle build..."
     startForeground(NOTIFICATION_ID, buildNotification(currentPhase, true))
     return FlutterBuildManager.startBuild(projectDir, commandArgs, listener)
   }
